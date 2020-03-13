@@ -103,6 +103,17 @@ typedef enum{
 	T_MAX
 }TIME_UP_INDEX;
 
+
+//Index match main_v[]
+typedef enum{
+	D_SP = 0,
+	D_D1,
+	D_Hz,
+	D_A,
+	D_RUN,
+	D_MAX
+}MAIN_DISPLAY_INDEX;
+
 typedef struct{
 
 	unsigned char digitData[4];			///< Current digit data on display, 0=DG4, 1=DG3, 2=DG2, 3=DG1 (Left to Right)
@@ -114,14 +125,16 @@ typedef struct{
 	unsigned short last_time;			///< Save last time that switch active
 	HELD_FLAG mode;
 	struct {
-		signed char group;			///< Save current parameter group
-		signed char number;			///< Save current parameter number
+		MB_DETAIL_ADDR detail;
+		signed char group;				///< Save current parameter group
+		signed char number;				///< Save current parameter number
 	}parameter;
 	DIGIT_BLINK digit_blink;			///< 0=Normal, 1=Blink (Rang 0-3)
 	LED_DATA led_blink;					///< 0=Normal, 1=Blink
 	signed long mb_buffer;				///< Buffer for write to MB
-	unsigned short set_point;
-
+	unsigned short main_v[D_MAX];		///< Save Main value: SP, Hz, A, D1
+	unsigned char mb_timeout;			///< Count MB timeout to display -tO-
+	unsigned char A00;					///< Save value of A00
 } KEYPAD_DATA;
 
 //Control Command (1409)
@@ -160,6 +173,10 @@ typedef union{
 	} bit;
 }O_STATUS;
 
+typedef struct{
+	unsigned char name;			//Parameter group name on 7-Segment value
+	unsigned char max;			//The final parameter number
+}para_g;
 
 //========= Extern ==========//
 extern const uint8_t SOFT_VER;

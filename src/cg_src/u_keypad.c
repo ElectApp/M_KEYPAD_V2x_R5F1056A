@@ -69,32 +69,44 @@ unsigned char lastPass[4];		//Save sequence of button that user press for checki
 unsigned char pass_count;
 
 //============================== Other ============================//
-const uint8_t SOFT_VER = 100;	//Software Version
+const unsigned char SOFT_VER = 100;		//Software Version
+const unsigned char PARA_LEN = 50;		//Number of parameter per group
+enum{
+	G_A,
+	G_B,
+	G_C,
+	G_D,
+	G_E,
+	G_F,
+	G_H,
+	G_MAX
+}GROUP_TYPE;
+const unsigned char GROUP_NAME[G_MAX] = {DG_A, DG_b, DG_C, DG_d, DG_E, DG_F, DG_H};
+
+//Parameter Setting Group
+unsigned char GROUP_LEN;
+para_g GROUP[G_MAX];
 
 KEYPAD_DATA key;		//Keypad
 O_STATUS oSt;			//Storage Driver Status
 O_COMMAND oCom;			//Storage Driver Command
 
-//Modbus interval reading
+//=============== MODBUS ==============//
+#define SET_POINT_ADDR				memSize.ram_start+conAddr.f_set
+
+#define WriteSetPoint()				Set_MB_WriteSingle(SET_POINT_ADDR, key.main_v[D_SP])
+#define WriteControlCommand(x)		Set_MB_WriteSingle(memSize.ram_start+conAddr.operation, (x))
 //Interval Time
 const unsigned short INTERVAL_STOP = 1000;
 const unsigned short INTERVAL_RUN = 50;
-
-
-//Index on Main Display
-typedef enum{
-	D_SP = 0,
-	D_Hz,
-	D_A,
-	D_OFF
-}MAIN_DISPLAY_INDEX;
-
-unsigned short main_v[5];
-unsigned short fault_v, set_point, para_v;
-
-//MODBUS
+//Variable
 MB_CONFIG mbCon;
-MB_MEMORY_SIZE memory;
+MB_MEMORY_SIZE memSize;
+MB_CONFIG_ADDR conAddr;
+MB_CONFIG_D1_ADDR conD1Addr;
+MB_DETAIL_ADDR f_setDetail;
+MB_GROUP mbG;
+
 
 //Other
 extern unsigned short ms_counter;
@@ -122,8 +134,9 @@ void InitialKeypad(void){
 
     //Initial and start MB
     mbCon.slave_id = 1;
-    mbCon.interval_time = 0;
+    mbCon.interval_time = 10;
     MB_Init(&mbCon, &ModbusResponse);
+    Set_MB_Special(Fn_ReadMemorySize, SOFT_VER);
     mbCon.status = MB_Ready;
 
 }
@@ -144,19 +157,19 @@ void ShiftOutAndLatch(unsigned char data){
 	RCLK(1); //Latch
 }
 
-void DisplaySingleDigit(unsigned char index, unsigned char value){
+void DisplaySingleDigit(unsigned char *index, unsigned char *value){
 	//Clear All
 	ShiftOutAndLatch(0);
 	DG1(0); DG2(0); DG3(0); DG4(0); LED(0);	//Clear Bias
 	//On Bias
-	switch(index){
+	switch(*index){
 		case 4: LED(1); break;	//Same digit
 		case 3: DG1(1); break;
 		case 2: DG2(1); break;
 		case 1: DG3(1); break;
 		case 0: DG4(1); break;
 	}
-	ShiftOutAndLatch(value); 		//Latch and display
+	ShiftOutAndLatch(*value); 		//Latch and display
 }
 
 
@@ -167,13 +180,13 @@ void LoopDisplay2(unsigned char state_off){
 
 	//Display
 	if(key.current_digit_on==4){
-		DisplaySingleDigit(key.current_digit_on, key.led.byte);
+		DisplaySingleDigit(&key.current_digit_on, &key.led.byte);
 	}else{
 		//Check DG off: 0-3
 		if(state_off && bitRead(key.digit_blink.byte, key.current_digit_on)){
-			DisplaySingleDigit(key.current_digit_on, 0);
+			DisplaySingleDigit(&key.current_digit_on, 0);
 		}else{
-			DisplaySingleDigit(key.current_digit_on, key.digitData[key.current_digit_on]);
+			DisplaySingleDigit(&key.current_digit_on, &key.digitData[key.current_digit_on]);
 		}
 	}
 }
@@ -433,8 +446,34 @@ void DisplaySigned(unsigned short modbus_value, unsigned char decimal){
  *
  * */
 void DisplayParameterName(signed char *index_group, signed char *number){
+	unsigned char buff, max;
 
+	//Limit group
+	if(*index_group>GROUP_LEN-1){
+		//MAX
+		*index_group = GROUP_LEN-1;
+	}else if(*index_group<0){
+		//MIN
+		*index_group = 0;
+	}
 
+	//Limit parameter number
+	max = GROUP[*index_group].max;
+	if(*number>max){
+		//MAX
+		*number = max;
+	}else if(*number<0){
+		//MIN
+		*number = 0;
+	}
+
+	//Display
+	buff = *number;
+	//EX. F-00
+	key.digitData[0] = GROUP[*index_group].name;
+	key.digitData[1] = DG_;
+	key.digitData[2] = Num_code[buff/10];	//Can't use Num_code[*number/10]
+	key.digitData[3] = Num_code[buff%10];	//Can't use Num_code[*number%10] due to *number is updated since top line
 
 }
 
@@ -449,65 +488,45 @@ void DisplayParameterValue(unsigned short mb_value, unsigned char decimal){
 	}
 }
 
-//uint16_t getConfigResponseValue(CONFIG_ADDR_INDEX index){
-//	return mb.response_buff[mb.config_addr[index]];
-//}
-
 
 void DisplayMain(void){
-	//para_t dmT;
 
 	//Allow?
 	if(key.mode.bit.function || key.mode.bit.editing){ return; }
-	//Keypad timeout?
-	if(!key.mode.bit.ready){
-		DisplayCode(DG_, DG_t, DG_O, DG_);
-		return;
-	}
 	//Clear LED main display
 	key.led.byte &= MAIN_LED_OFF;
+	//Keypad timeout?
+	if(!key.mode.bit.ready){ DisplayCode(DG_, DG_t, DG_O, DG_); return; }
 	//Fault?
-	if(oSt.bit.trip){
-		return;
-	}
+	if(oSt.bit.trip){ return; }
 	//Display
 	switch(key.mode.bit.display){
-		case D_SP: //Set point
+		case D_SP: //SP
+			key.led.bit.sp = 1U;
 			//Block when editing set point
 			if(key.mode.bit.set || key.mode.bit.editing || key.mode.bit.count_move){ return; }
 			//Value
-			//DisplayDEC(getConfigResponseValue(CAI_F_Set), getConfigResponseValue(CAI_N_F_Set));
+			if(oSt.bit.stop_run){
+				DisplayDEC(key.main_v[D_RUN], conAddr.n_f_set);
+			}else{
+				DisplayDEC(key.main_v[D_SP], conAddr.n_f_set);
+			}
 			break;
 		case D_Hz: //Hz
 			key.led.bit.hz = 1U;
-			//Block when editing set point
-			if(key.mode.bit.set || key.mode.bit.editing || key.mode.bit.count_move){ return; }
-			//Value
-			//DisplayDEC(getConfigResponseValue(CAI_Hz), getConfigResponseValue(CAI_N_Hz));
-			/*
-			if(oSt.bit.stop_run){
-				//DisplayDEC(main_v[D_HZ], 2);	//Running
-				DisplayDEC(getConfigResponseValue(CAI_Hz), getConfigResponseValue(CAI_N_Hz));
-			}else{
-				//DisplayDEC(set_point, 2);	//Stop
-				DisplayDEC(getConfigResponseValue(CAI_F_Set), getConfigResponseValue(CAI_N_F_Set));
-			}
-			*/
+			DisplayDEC(key.main_v[D_Hz], conAddr.n_hz);
 			break;
 		case D_A: //Amp
 			key.led.bit.a = 1U;
-			DisplayDEC(main_v[D_A], 1);
+			DisplayDEC(key.main_v[D_A], conAddr.n_a);
 			break;
-		case D_OFF: //Display 1
-			key.led.bit.sp = 1U;
-			/*
-			dmT = PARA_F00[rom.data[F00]-1];
+		case D_D1: //Display 1
 			//Signed?
-			if(bitRead(dmT.edit_display, SIGNED_BIT)){
-				DisplaySigned(main_v[D_F00], dmT.decimal);
+			if(bitRead(key.main_v[D_D1], 15)){
+				DisplaySigned(key.main_v[D_D1], conD1Addr.n[key.A00]);
 			}else{
-				DisplayDEC(main_v[D_F00], dmT.decimal);
-			}*/
+				DisplayDEC(key.main_v[D_D1], conD1Addr.n[key.A00]);
+			}
 			break;
 	}
 }
@@ -546,54 +565,247 @@ void ChangeValue(signed char flag, unsigned short min, unsigned short max){
 
 }
 
+
+//UP: flag = 1, DOWN: flag = -1
+void SetUpDown(signed char flag){
+	//Check state
+	switch(key.mode.bit.function){
+	case 1: //Change parameter group
+		switch(key.mode.bit.count_move){
+			case 1: //Change group name
+				key.parameter.group += flag;
+				key.parameter.number = 0;
+				break;
+			case 3: //Change 10 step
+				key.parameter.number += 10*flag;
+				break;
+			default: //Change 1 step
+				key.parameter.number += flag;
+		}
+		//Display
+		DisplayParameterName(&key.parameter.group, &key.parameter.number);
+		break;
+	case 2: //Change parameter value
+		//Check read only bit
+		if(!key.parameter.detail.rw){ return; }
+		//Change value and display
+		key.mb_buffer = key.parameter.detail.data;
+		ChangeValue(flag, key.parameter.detail.min, key.parameter.detail.max);
+		DisplayParameterValue(key.mb_buffer, key.parameter.detail.dotFormat);
+		break;
+	default: //Change Set Point
+		//Allow?
+		if(oSt.bit.trip || key.mode.bit.display || !key.mode.bit.ready || !f_setDetail.rw){ return; }
+		//Set flag and clear timer
+		key.mode.bit.editing = oSt.bit.stop_run;
+		key.time_up[T_SET] = 0;
+		key.time_up[T_MOVE] = 0;
+		//Change value
+		key.mb_buffer = key.main_v[D_SP];
+		ChangeValue(flag, f_setDetail.min, f_setDetail.max);
+		key.main_v[D_SP] = key.mb_buffer;
+		DisplayDEC(key.main_v[D_SP], f_setDetail.dotFormat);
+		//Write to MB
+		WriteSetPoint();
+	}
+}
+
+
+//Note!!! size of *from must = size of *to
+void CopyU8Array(unsigned char *from, unsigned char *to, unsigned short len){
+	while(len--){
+		to[len] = from[len];
+	}
+}
+
+unsigned char GetIndexStart(MB_DETAIL_ADDR *d){
+	unsigned char index = 0;
+	if(d->dotFormat < 16){
+		unsigned char pDg[sizeof(key.digitData)];
+		unsigned char i;
+		CopyU8Array(key.digitData, pDg, sizeof(key.digitData));
+		DisplayDEC(d->max, d->dotFormat);
+		for(i=0; i<4; i++){
+			if(key.digitData[i]>0 && ((key.digitData[i]&DG_O)!=DG_O)){
+				index = i; break;
+			}
+		}
+		//Back to display
+		CopyU8Array(pDg, key.digitData, sizeof(key.digitData));
+	}
+	return index;
+}
+
 void SwitchCallback(unsigned char sw){
-	unsigned short d[] = {5, 6, 7};
 	switch(sw){
-	case FUNC_BT: break;
-	case MOVE_BT: break;
-	case UP_BT:
-		break;
-	case DOWN_BT:
-		break;
-	case ENTER_BT:
-		test++;
-		switch(test){
-		case 1:
-			Set_MB_WriteSingle(0, 1);
-			test = 2;
-			break;
-		case 2:
-			Set_MB_WriteMultiple(10, d, 3);
-			break;
-		case 3:
-			Set_MB_Special(Fn_ReadMemorySize, SOFT_VER);
-			break;
-		case 4:
-			Set_MB_Special(Fn_ReadSizeInvName, 0);
-			break;
-		case 5:
-			Set_MB_Special(Fn_ReadFaultName, 1);
-			break;
-		case 6:
-			Set_MB_Special(Fn_ReadFirmwareName, 0);
-			break;
-		case 7:
-			Set_MB_Special(Fn_ReadConfigAddr, 0);
-			break;
-		case 8:
-			Set_MB_Special(Fn_ReadConfigD1Addr, 0);
-			break;
-		case 9:
-			Set_MB_Special(Fn_ReadDetailAddr, 0);
-			break;
-		default:
-			test = 0;
-			Set_MB_ReadHolding(0, 1);
+	case FUNC_BT:
+		//Clear
+		key.mode.bit.count_move = 0;
+		key.mode.bit.editing = 0;
+		key.mode.bit.set = 0;
+		key.mode.bit.wait_unlock = 0;
+		key.mode.bit.write_mb = 0;
+		key.mode.bit.read_mb = 0;
+		//Check state
+		if(!key.mode.bit.function){
+			//Setting Mode
+			key.mode.bit.function = 1U; //Set flag
+			key.led.bit.func = 1U;	//Show 'FUNC' LED
+			key.led.byte &= MAIN_LED_OFF;
+			//Display first parameter
+			key.parameter.group = 0;
+			key.parameter.number = 0;
+			DisplayParameterName(&key.parameter.group, &key.parameter.number);
+		}else{
+			//Clear all
+			key.led.bit.func = 0;
+			key.mode.bit.function = 0;
+			//Back to Operating mode
+			DisplayMain(); //Main
 		}
 		break;
-	case SET_BT: break;
-	case RUN_BT: break;
-	case STR_BT: break;
+	case MOVE_BT:
+
+		//Operating Mode?
+		if(!key.mode.bit.function){
+			//Allow?
+			if(oSt.bit.trip || key.mode.bit.display || !key.mode.bit.ready || !f_setDetail.rw){ return; }
+			//Show Set Point in short time in running mode
+			if(oSt.bit.stop_run){
+				//Display
+				DisplayDEC(key.main_v[D_SP], conAddr.n_f_set);
+				//Set flag for display Set Point
+				key.mode.bit.editing = 1;
+				key.time_up[T_SET] = 0;
+			}
+			//Initial 'MOVE' index
+			if(!key.mode.bit.count_move){ key.mode.bit.count_move = GetIndexStart(&f_setDetail); }
+		}else if(key.mode.bit.function==2){
+			//Allow?
+			if(!key.parameter.detail.rw){ return; }
+			//Initial 'MOVE' index
+			if(!key.mode.bit.count_move){ key.mode.bit.count_move = GetIndexStart(&key.parameter.detail); }
+		}
+
+		//Clear all
+		key.digit_blink.byte = 0;
+		key.time_up[T_MOVE] = 0;
+		//Shift
+		key.mode.bit.count_move++;
+		//Digit off?
+		if(key.mode.bit.count_move>0 && key.mode.bit.count_move<4
+				&& key.digitData[key.mode.bit.count_move-1] == 0){ key.digitData[key.mode.bit.count_move-1] = DG_O; }
+		//Set digit blink
+		switch(key.mode.bit.count_move){
+			case 1:
+				key.digit_blink.bit.dg4 = 1;
+				//if(key.digitData[0] == 0){ key.digitData[0] = DG_O; }
+				break;
+			case 2:
+				if(key.mode.bit.function==1){
+					//Shift '-' on parameter name
+					key.digit_blink.bit.dg2 = 1;
+					key.mode.bit.count_move = 3;
+				}else{
+					key.digit_blink.bit.dg3 = 1;
+					//if(key.digitData[1] == 0){ key.digitData[1] = DG_O; }
+				}
+				break;
+			case 3:
+				key.digit_blink.bit.dg2 = 1;
+				//if(key.digitData[2] == 0){ key.digitData[2] = DG_O; }
+				break;
+			case 4:
+				key.digit_blink.bit.dg1 = 1;
+				//if(key.digitData[3] == 0){ key.digitData[3] = DG_O; }
+				break;
+			default:
+				key.mode.bit.count_move = 0;
+		}
+		break;
+	case UP_BT:
+		SetUpDown(1);
+		break;
+	case DOWN_BT:
+		SetUpDown(-1);
+		break;
+	case ENTER_BT:
+		//Clear
+		key.mode.bit.count_move = 0;
+		key.mode.bit.read_mb = 0;
+		//Check state
+		switch(key.mode.bit.function){
+		case 1:
+			//Read Value from MB
+			key.mode.bit.read_mb = 1U; //Set flag
+			//Set MB address for reading
+//			mbG.group[2].start_address = table.address;
+//			mb.inverval_time = 0;
+			break;
+		case 2:
+			//Display last parameter
+			DisplayParameterName(&key.parameter.group, &key.parameter.number);
+			//Set state
+			key.mode.bit.function = 1;
+			break;
+		default:
+			//Allow?
+			if(oSt.bit.trip || !key.mode.bit.ready){ return; }
+			//Select display on operating mode
+			key.mode.bit.display++;
+			if(key.mode.bit.display>3){ key.mode.bit.display = 0; }
+			//Display
+			DisplayMain();
+		}
+		break;
+	case SET_BT:
+		//Clear
+		key.mode.bit.count_move = 0;
+		//Check read only bit
+		//if(bitRead(table.edit_display, RW_BIT) || table.address>=20000){ return; }
+		//Clear time counter
+		key.time_up[T_SET] = 0;
+		key.time_up[T_BLINK] = 0;
+		//Check state
+		if(key.mode.bit.function==2){
+			/*
+			if(table.address>=10000){
+				unsigned char num = table.address-10000;
+				//Write to ROM
+				rom.data[num] = key.mb_buffer;
+				rom.exe_flag = WRITE_FLAG;
+				key.mode.bit.set = 1U; 	//Set flag for show SEt
+				//Update interval reading address for SP LED
+				if(num==F00){
+					mbG.group[3].start_address = PARA_F00[rom.data[F00]-1].address;
+				}
+			}else{
+				//Write to MB
+				WriteSingle(table.address, key.mb_buffer); //Action
+				key.mode.bit.write_mb = 1U; //Set flag
+			}
+			*/
+		}else if(!key.mode.bit.function && !key.mode.bit.display && !oSt.bit.trip){
+			//Save to ROM
+			//rom.data[SP_HZ] = set_point;
+			//rom.exe_flag = WRITE_FLAG;
+			//Write to MB
+			WriteSetPoint();
+			key.mode.bit.write_mb = 1U; //Set flag
+		}
+		break;
+	case RUN_BT:
+		//Allow?
+		if(key.mode.bit.function || oSt.bit.trip || !key.mode.bit.ready){ return; }
+		//RUN
+		WriteControlCommand(1);
+		break;
+	case STR_BT:
+		//Allow?
+		if(key.mode.bit.function || !key.mode.bit.ready){ return; }
+		//Stop
+		WriteControlCommand(0);
+		break;
 	}
 }
 
@@ -688,6 +900,7 @@ void SwitchModeSelector(unsigned char sw){
 		//Make sure user press this SW
 		if(key.sw_stack>2){
 
+			/*
 			//Check mode
 			if(key.mode.bit.function>0){
 				//Check button
@@ -696,6 +909,13 @@ void SwitchModeSelector(unsigned char sw){
 				}else{
 					BlockHoldSwitch(sw);
 				}
+			}else{
+				BlockHoldSwitch(sw);
+			}
+			*/
+
+			if(sw==UP_BT || sw==DOWN_BT){
+				HoldUpDownActive(sw);
 			}else{
 				BlockHoldSwitch(sw);
 			}
@@ -796,41 +1016,226 @@ void RunKeypad(void){
 
 }
 
-void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
-	//unsigned short d = (unsigned short)mb->fn<<8 | mb->error;	//FFEE by FF = Function Code, EE = Error Code
-	//DisplayHEX(d);
-	//DisplayHEX(mb.error);
-	//DisplayDEC(mb.response[0], 0);
-	//DisplayDEC(mbSpec->memory.ram_start, 0);
+unsigned char GetMaxValueOfArray(unsigned char *arr, unsigned short offset, unsigned short len){
+	unsigned char max = 0;
+	while(len--){
+		if(len<offset){ break; }
+		if(max<arr[len]){
+			max = arr[len];
+		}
+	}
+	return max;
+}
 
-    switch (mb->fn)
-    {
-    case Fn_ReadHolding:
-    	DisplayDEC(mb->response[0], 0);
-        break;
-    case Fn_WriteSingle:
-    	DisplayDEC(mb->response[1], 0);
-        break;
-    case Fn_ReadMemorySize:
-    	memory = mbSpec->memory;
-    	DisplayDEC(memory.ram_start, 0);
-    	break;
-	case Fn_ReadSizeInvName:
-	case Fn_ReadFaultName:
-	case Fn_ReadFirmwareName:
-		DisplayCode(mbSpec->segment.dg3, mbSpec->segment.dg2, mbSpec->segment.dg1, mbSpec->segment.dg0);
-		break;
-	case Fn_ReadConfigAddr:
-		DisplayDEC(mbSpec->config.f_run, 0);
-		break;
-	case Fn_ReadConfigD1Addr:
-		DisplayDEC(mbSpec->configD1.d[0], mbSpec->configD1.n[0]);
-		break;
-	case Fn_ReadDetailAddr:
-		DisplayDEC(mbSpec->detail.max, mbSpec->detail.dotFormat);
-		break;
-    }
-	mbCon.interval_time = 1000;
+void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
+	//Check Result
+	if(mb->error==ERR_None)
+	{
+		unsigned char i, j, k;
+		//Clear
+		key.mb_timeout = 0;
+		//EXE with Function
+		switch(mb->fn)
+		{
+		case Fn_ReadMemorySize:	//key.led.bit.func = 1U;
+			memSize = mbSpec->memory;
+			//Setting group
+			if(memSize.rom_len){
+				k = memSize.rom_len-1;
+				i = k/PARA_LEN;
+				j = k%PARA_LEN;
+				if(!i){ i = 1; }
+
+				GROUP_LEN = i + (j>0);
+				//Out of group rang?
+				if(GROUP_LEN>G_MAX){
+					GROUP_LEN = G_MAX;
+					j = PARA_LEN;
+				}
+				//Set Group name and max
+				for(i=0; i<GROUP_LEN; i++){
+					GROUP[i].name = GROUP_NAME[i];
+					if(i==GROUP_LEN-1){
+						GROUP[i].max = j;
+					}else{
+						GROUP[i].max = PARA_LEN;
+					}
+				}
+			}
+			//Next
+			Set_MB_Special(Fn_ReadConfigAddr, 0);
+			break;
+		case Fn_ReadConfigAddr: //key.led.bit.run = 1U;
+			conAddr = mbSpec->config;
+			Set_MB_Special(Fn_ReadConfigD1Addr, 0);
+			/*
+			key.led.byte = 0;
+			switch(key.mode.bit.display){
+			case D_SP:
+				key.led.bit.sp = 1U;
+				DisplayDEC(conAddr.n_hz, 0);
+				break;
+			case D_D1:
+				DisplayDEC(conAddr.n_a, 0);
+				break;
+			case D_Hz:
+				key.led.bit.hz = 1U;
+				DisplayDEC(0, 0);
+				break;
+			case D_A:
+				key.led.bit.a = 1U;
+				DisplayDEC(0, 0);
+				break;
+			}*/
+			break;
+		case Fn_ReadConfigD1Addr: //key.led.bit.stop = 1U;
+			conD1Addr = mbSpec->configD1;
+			Set_MB_Special(Fn_ReadDetailAddr, memSize.ram_start+conAddr.f_set);
+			break;
+		case Fn_ReadDetailAddr:
+			//Setting mode?
+			if(!key.mode.bit.function)
+			{
+				//Save 'F_set' detail
+				if(mbSpec->detail.addr == (memSize.ram_start+conAddr.f_set)){
+					f_setDetail = mbSpec->detail;
+					//Set MB interval reading
+					mbG.group[0].start_address = memSize.ram_start;	//Main
+					mbG.group[0].length = GetMaxValueOfArray((unsigned char*)&conAddr, 2, sizeof(conAddr))+1;
+					mbG.group[1].start_address = memSize.rom_start;	//A-00
+					mbG.group[1].length = 1;
+					mbG.total = 2;
+					mbG.counter = 0;
+					//Start MB F#3
+					mbCon.next_fn = Fn_ReadHolding;
+				}
+			}
+			else
+			{
+				//Save parameter detail
+				key.parameter.detail = mbSpec->detail;
+				key.main_v[D_SP] = key.parameter.detail.data;
+				//Show Parameter Value
+				DisplayParameterValue(key.parameter.detail.data, key.parameter.detail.dotFormat);
+				//Set flag
+				key.mode.bit.function = 2;
+				//Back to Interval reading
+				mbCon.next_fn = Fn_ReadHolding;
+			}
+			break;
+		case Fn_ReadHolding: //key.led.bit.hz = 1U;
+			//Ready
+			key.mode.bit.ready = 1;
+			//Set MB interval reading for display 1
+			if(mb->request == memSize.rom_start){
+				key.A00 = mb->response[0];
+				mbG.group[1].start_address = memSize.ram_start+conD1Addr.d[key.A00];
+				mbG.group[1].length = 1;
+			}
+			//Interval Checking
+			if(mb->request == memSize.ram_start)
+			{
+				/*/Fault
+				if(mb->response[conAddr.fault]){
+					//Read Fault code
+					Set_MB_Special(Fn_ReadFaultName, mb->response[conAddr.fault]);
+					oSt.bit.trip = 1;
+				}
+				else{
+					oSt.bit.trip = 0;	//Clear
+					mbCon.next_fn = Fn_ReadHolding;
+				}*/
+				//Update Main Display
+				oSt.word = mb->response[conAddr.operation];	//Status
+				//if(!key.mode.bit.editing && !key.mode.bit.count_move){ key.main_v[D_SP] = mb->response[conAddr.f_set]; }//Set point
+				key.main_v[D_SP] = mb->response[conAddr.f_set];
+				key.main_v[D_RUN] = mb->response[conAddr.f_run]; //Running
+				key.main_v[D_Hz] = mb->response[conAddr.hz];	 //Hz
+				key.main_v[D_A] = mb->response[conAddr.a];		 //A
+				//LED status
+				key.led.bit.run = oSt.bit.stop_run;
+				key.led.bit.stop = !oSt.bit.stop_run;
+			}
+			if(mb->request == mbG.group[1].start_address)
+			{
+				//if(!key.mode.bit.ready){ key.mode.bit.ready = 1; }
+				key.main_v[D_D1] = mb->response[0];	//Display 1 (All LED Off)
+			}
+			//Display Main
+			DisplayMain();
+			//Next group
+			mbG.counter++;
+			mbCon.interval_time = 10;	//Delay polls
+			if(mbG.counter>mbG.total-1){
+				mbG.counter = 0;	//Clear group counter
+				if(oSt.bit.stop_run && !key.mode.bit.function){
+					//High interval reading only 'RUN' mode and 'Operating Mode'
+					mbCon.interval_time = INTERVAL_RUN;
+				}else{
+					mbCon.interval_time = INTERVAL_STOP;
+				}
+			}
+			break;
+		case Fn_ReadFaultName:
+			//Display fault only Operating Mode
+			if(!key.mode.bit.function){
+				DisplayCode(mbSpec->segment.dg3, mbSpec->segment.dg2, mbSpec->segment.dg1, mbSpec->segment.dg0);	//Code
+			}
+			//Back to Reading
+			mbCon.next_fn = Fn_ReadHolding;
+			break;
+		case Fn_ReadSizeInvName:
+			DisplayCode(mbSpec->segment.dg3, mbSpec->segment.dg2, mbSpec->segment.dg1, mbSpec->segment.dg0);
+			break;
+		case Fn_ReadFirmwareName:
+			DisplayCode(mbSpec->segment.dg3, mbSpec->segment.dg2, mbSpec->segment.dg1, mbSpec->segment.dg0);
+			break;
+		case Fn_WriteSingle:
+			//Check flag
+			if(key.mode.bit.write_mb)
+			{
+				//Set flag
+				key.mode.bit.write_mb = 0;	//blocking update again
+				key.mode.bit.set = 1U; 		//Set flag for show SEt
+			}
+
+			//Verify 'set point' value
+			if(mb->request==SET_POINT_ADDR)
+			{
+				key.main_v[D_SP] = mb->response[1];
+			}
+
+			//Back to Reading
+			mbCon.next_fn = Fn_ReadHolding;
+			break;
+		}
+	}
+	else if(mb->error==ERR_ResponseTimeout)
+	{
+		//Count Timeout to display -tO-
+		key.mb_timeout++;
+		if(key.mb_timeout>5){
+			key.mb_timeout = 0;
+			//Block 'MOVE' BTN
+			key.mode.bit.ready = 0;
+			//Display -tO-
+			DisplayMain();
+			//
+			mbCon.interval_time = INTERVAL_STOP;
+		}
+	}
+	else
+	{
+		unsigned short d = (unsigned short)mb->fn<<8 | mb->error;	//FFEE by FF = Function Code, EE = Error Code
+		DisplayHEX(d);
+		mbCon.interval_time = INTERVAL_STOP;
+	}
+
+	//Back to Interval Reading
+	if(mbCon.next_fn == Fn_ReadHolding)
+	{
+		Set_MB_ReadHolding(mbG.group[mbG.counter].start_address, mbG.group[mbG.counter].length);
+	}
 
 }
 
