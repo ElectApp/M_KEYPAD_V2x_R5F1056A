@@ -200,8 +200,10 @@ void Send_MB_Request(void){
     //Clear
     ClearU16Array(mbResp.response, mbResp.response_len);
     mbResp.response_len = 0;
+    mbResp.error = ERR_None;
     //Update
     mbReq.fn = _mbCon->next_fn;
+    mbResp.request = mbReq.request[0];
     //Set Byte Array
     //Header
     tx_rx_len = 0;
@@ -286,7 +288,6 @@ void MB_Receive_Init(void){
     //Clear
     count_up = 0;
     tx_rx_len = 0;
-    mbResp.response_len = 0;
     //Switch Mode
     SetDR(0);
     R_UART1_Receive(tx_rx, exp_rx_len);
@@ -329,6 +330,7 @@ void Set_MB_Response(void){
         //Normal
         unsigned short i;
         mbResp.fn = tx_rx[1];
+        mbResp.error = ERR_None;
         switch (mbResp.fn)
         {
         case Fn_ReadHolding:

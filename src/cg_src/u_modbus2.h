@@ -52,6 +52,7 @@ typedef struct{
 typedef struct{
     unsigned char error;
     unsigned char fn;
+    unsigned short request;			//Save MB Read/Write Address, Fault Index
     unsigned short response[MB_RESPONSE_MAX];
     unsigned short response_len;
 }MB_RESPONE;
@@ -153,6 +154,18 @@ typedef struct{
 	MB_CONFIG_D1_ADDR configD1;
 	MB_DETAIL_ADDR detail;
 }MB_SPECIAL;
+
+typedef struct{
+	unsigned short start_address;
+	unsigned short length;
+}MB_GROUP_ADDR;
+
+//Multiple group reading
+typedef struct{
+	MB_GROUP_ADDR group[10];
+	unsigned char counter;							///< count index group
+	unsigned char total;							///< Total group for reading
+}MB_GROUP;
 
 
 typedef void MB_CALLBACK(MB_RESPONE *mb, MB_SPECIAL *mbSpec);
