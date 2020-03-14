@@ -11,9 +11,10 @@
 #include "u_modbus2.h"
 
 //================ Define =================//
-#define SetDR(x)               P3_bit.no1 = x   //1 = Drive Mode, 0 = Receive Mode
-#define SendData()			   R_UART1_Send(tx_rx, tx_rx_len)	///< Must include "r_cg_sau.h"
-#define TX_RX_MAX              260
+#define SetDR(x)               		P3_bit.no1 = x   //1 = Drive Mode, 0 = Receive Mode
+#define SendData()			   		R_UART1_Send(tx_rx, tx_rx_len)	///< Must include "r_cg_sau.h"
+#define TX_RX_MAX              		260
+const unsigned char FRAME_MIN = 5;	//Minimum frame size of MB: Slave ID, Function Code, Error Code, CRC Hi, CRC Lo
 
 typedef struct{
     unsigned char fn;
@@ -290,103 +291,125 @@ void MB_Receive_Init(void){
     tx_rx_len = 0;
     //Switch Mode
     SetDR(0);
-    R_UART1_Receive(tx_rx, exp_rx_len);
+    R_UART1_Receive(tx_rx, FRAME_MIN);
     //Status
     _mbCon->status = MB_SendEnd;
 }
 
+void Callback_Response(void){
+	//Block
+	SetDR(1);
+    //Callback
+	if(_callback){ _callback(&mbResp, &mbSpec); }
+	//End
+	_mbCon->status = MB_ResponseEnd;
+	count_up = 0;
+}
 
 void Set_MB_Response(void){
 	SEGMENT_VALUE *seg;
 	MB_CONFIG_ADDR *con;
 	MB_CONFIG_D1_ADDR *cond1;
 	unsigned short crc;
-	SetDR(1);	//Block
-	tx_rx_len = exp_rx_len;	//Limit
-    //CRC
-	crc = MB_CRC16(tx_rx, tx_rx_len-2);
-    //Check Frame
-    if (tx_rx[tx_rx_len-2] != lowByte(crc) || tx_rx[tx_rx_len-1] != highByte(crc))
-    {
-        //Invalid CRC
-        mbResp.error = ERR_InvalidCRC;
-    }
-    else if(tx_rx[0] != _mbCon->slave_id)
-    {
-        //Invalid Slave ID
-        mbResp.error = ERR_InvalidSlaveID;
-    }
-    else if((tx_rx[1] & 0x7F) != mbReq.fn)
-    {
-        //Invalid Function
-        mbResp.error = ERR_InvalidFunction;
-    }
-    else if(bitRead(tx_rx[1], 7))
-    {
-        //MB Exception
-        mbResp.error = tx_rx[2];
-    }else
-    {
-        //Normal
-        unsigned short i;
-        mbResp.fn = tx_rx[1];
-        mbResp.error = ERR_None;
-        switch (mbResp.fn)
-        {
-        case Fn_ReadHolding:
-            for(i=0; i<(tx_rx[2]>>1); i++){
-            	mbResp.response[mbResp.response_len++] = u16Value(tx_rx[(2*i)+3], tx_rx[(2*i)+4]);
-            }
-            break;
-        case Fn_WriteSingle:
-        case Fn_WriteMultiple:
-            for(i=0; i<2; i++){
-            	mbResp.response[mbResp.response_len++] = u16Value(tx_rx[(2*i)+2], tx_rx[(2*i)+3]);
-            }
-            break;
-        case Fn_ReadMemorySize:
-        	mbSpec.memory.productID = tx_rx[2];
-        	mbSpec.memory.rom_start = u16Value(tx_rx[3], tx_rx[4]);
-        	mbSpec.memory.rom_len = u16Value(tx_rx[5], tx_rx[6])
-        	mbSpec.memory.ram_start = u16Value(tx_rx[7], tx_rx[8])
-        	mbSpec.memory.ram_len = u16Value(tx_rx[9], tx_rx[10])
-        	mbSpec.memory.setSize_len = tx_rx[11];
-        	mbSpec.memory.fault_len = tx_rx[12];
-        	break;
-    	case Fn_ReadSizeInvName:
-    	case Fn_ReadFaultName:
-    		seg = (SEGMENT_VALUE*)&tx_rx[4]; //&tx_rx[4]: Complier look pointer variable that start from index = 4
-    		mbSpec.segment = *seg;
-    		break;
-    	case Fn_ReadFirmwareName:
-    		seg = (SEGMENT_VALUE*)&tx_rx[3];
-    		mbSpec.segment = *seg;
-    		break;
-    	case Fn_ReadConfigAddr:
-    		con = (MB_CONFIG_ADDR*)&tx_rx[2];
-    		mbSpec.config = *con;
-    		break;
-    	case Fn_ReadConfigD1Addr:
-    		cond1 = (MB_CONFIG_D1_ADDR*)&tx_rx[2];
-    		mbSpec.configD1 = *cond1;
-    		break;
-    	case Fn_ReadDetailAddr:
-    		mbSpec.detail.addr = u16Value(tx_rx[2], tx_rx[3]);
-    		mbSpec.detail.data = u16Value(tx_rx[4], tx_rx[5]);
-    		mbSpec.detail.min = u16Value(tx_rx[6], tx_rx[7]);
-    		mbSpec.detail.max = u16Value(tx_rx[8], tx_rx[9]);
-    		mbSpec.detail.def = u16Value(tx_rx[10], tx_rx[11]);
-    		mbSpec.detail.rw = tx_rx[12];
-    		mbSpec.detail.dotFormat = tx_rx[13];
-    		break;
-        }
-    }
-
-    //Callback
-	if(_callback){ _callback(&mbResp, &mbSpec); }
-	//End
-	_mbCon->status = MB_ResponseEnd;
-	count_up = 0;
+	//Get RX length = FRAM_SIZE
+	if(!tx_rx_len){
+		//Get only function code
+		mbResp.fn = (tx_rx[1] & 0x7F);
+		//Check
+	    if(tx_rx[0] != _mbCon->slave_id)
+	    {
+	        //Invalid Slave ID
+	        mbResp.error = ERR_InvalidSlaveID;
+	    }
+	    else if((tx_rx[1] & 0x7F) != mbReq.fn)
+	    {
+	        //Invalid Function
+	        mbResp.error = ERR_InvalidFunction;
+	    }
+	    else if(bitRead(tx_rx[1], 7))
+	    {
+	        //MB Exception
+	        mbResp.error = tx_rx[2];
+	    }
+	    if(mbResp.error)
+	    {
+		    //Callback
+		    Callback_Response();
+	    }
+	    else
+	    {
+	    	//Waiting to finish
+	    	tx_rx_len = FRAME_MIN;
+	    	R_UART1_Receive(&tx_rx[FRAME_MIN], exp_rx_len-FRAME_MIN);
+	    }
+	}else{
+		//Receive Finish
+		tx_rx_len = exp_rx_len;
+	    //Check CRC
+		crc = MB_CRC16(tx_rx, tx_rx_len-2);
+	    if (tx_rx[tx_rx_len-2] != lowByte(crc) || tx_rx[tx_rx_len-1] != highByte(crc))
+	    {
+	        //Invalid CRC
+	        mbResp.error = ERR_InvalidCRC;
+	    }
+	    else
+	    {
+	        //Normal
+	        unsigned short i;
+	        mbResp.error = ERR_None;
+	        switch (mbResp.fn)
+	        {
+	        case Fn_ReadHolding:
+	            for(i=0; i<(tx_rx[2]>>1); i++){
+	            	mbResp.response[mbResp.response_len++] = u16Value(tx_rx[(2*i)+3], tx_rx[(2*i)+4]);
+	            }
+	            break;
+	        case Fn_WriteSingle:
+	        case Fn_WriteMultiple:
+	            for(i=0; i<2; i++){
+	            	mbResp.response[mbResp.response_len++] = u16Value(tx_rx[(2*i)+2], tx_rx[(2*i)+3]);
+	            }
+	            break;
+	        case Fn_ReadMemorySize:
+	        	mbSpec.memory.productID = tx_rx[2];
+	        	mbSpec.memory.rom_start = u16Value(tx_rx[3], tx_rx[4]);
+	        	mbSpec.memory.rom_len = u16Value(tx_rx[5], tx_rx[6])
+	        	mbSpec.memory.ram_start = u16Value(tx_rx[7], tx_rx[8])
+	        	mbSpec.memory.ram_len = u16Value(tx_rx[9], tx_rx[10])
+	        	mbSpec.memory.setSize_len = tx_rx[11];
+	        	mbSpec.memory.fault_len = tx_rx[12];
+	        	break;
+	    	case Fn_ReadSizeInvName:
+	    	case Fn_ReadFaultName:
+	    		seg = (SEGMENT_VALUE*)&tx_rx[4]; //&tx_rx[4]: Complier look pointer variable that start from index = 4
+	    		mbSpec.segment = *seg;
+	    		break;
+	    	case Fn_ReadFirmwareName:
+	    		seg = (SEGMENT_VALUE*)&tx_rx[3];
+	    		mbSpec.segment = *seg;
+	    		break;
+	    	case Fn_ReadConfigAddr:
+	    		con = (MB_CONFIG_ADDR*)&tx_rx[2];
+	    		mbSpec.config = *con;
+	    		break;
+	    	case Fn_ReadConfigD1Addr:
+	    		cond1 = (MB_CONFIG_D1_ADDR*)&tx_rx[2];
+	    		mbSpec.configD1 = *cond1;
+	    		break;
+	    	case Fn_ReadDetailAddr:
+	    		mbSpec.detail.addr = u16Value(tx_rx[2], tx_rx[3]);
+	    		mbSpec.detail.data = u16Value(tx_rx[4], tx_rx[5]);
+	    		mbSpec.detail.min = u16Value(tx_rx[6], tx_rx[7]);
+	    		mbSpec.detail.max = u16Value(tx_rx[8], tx_rx[9]);
+	    		mbSpec.detail.def = u16Value(tx_rx[10], tx_rx[11]);
+	    		mbSpec.detail.rw = tx_rx[12];
+	    		mbSpec.detail.dotFormat = tx_rx[13];
+	    		break;
+	        }
+	    }
+	    //Callback
+	    Callback_Response();
+	}
 }
 
 /*
@@ -409,12 +432,8 @@ void MB_Handle(void){
 		//Check response timeout
 		count_up++;
     	if(count_up>950){
-    		SetDR(1);	//Block
-    		mbResp.error = ERR_ResponseTimeout;
-    		if(_callback){ _callback(&mbResp, &mbSpec); }
-    		//End
-    		_mbCon->status = MB_ResponseEnd;
-    		count_up = 0;
+    	    //Callback
+    	    Callback_Response();
     	}
 	}else if(_mbCon->status == MB_ResponseEnd){
 		count_up++;
