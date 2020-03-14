@@ -93,7 +93,10 @@ O_COMMAND oCom;			//Storage Driver Command
 
 //=============== MODBUS ==============//
 #define SET_POINT_ADDR				memSize.ram_start+conAddr.f_set
-
+#define A00_ADDR					memSize.rom_start
+#define DISPLAY1_ADDR				memSize.ram_start+conD1Addr.d[key.A00]
+#define SET_SIZE_ADDR				memSize.rom_start+conAddr.setSize
+#define VERSION_ADDR				memSize.rom_start+conAddr.softVer
 #define WriteSetPoint()				Set_MB_WriteSingle(SET_POINT_ADDR, key.main_v[D_SP])
 #define WriteControlCommand(x)		Set_MB_WriteSingle(memSize.ram_start+conAddr.operation, (x))
 //Interval Time
@@ -106,7 +109,6 @@ MB_CONFIG_ADDR conAddr;
 MB_CONFIG_D1_ADDR conD1Addr;
 MB_DETAIL_ADDR f_setDetail;
 MB_GROUP mbG;
-
 
 //Other
 extern unsigned short ms_counter;
@@ -435,6 +437,15 @@ void DisplaySigned(unsigned short modbus_value, unsigned char decimal){
 	}
 }
 
+void SetParameterMBAddress(void){
+	unsigned char i;
+	key.parameter.detail.addr = 0;
+	for(i=0; i<key.parameter.group; i++){
+		key.parameter.detail.addr += PARA_LEN;
+	}
+	key.parameter.detail.addr += key.parameter.number;
+}
+
 /*
  * Parameter Number Display
  *
@@ -475,16 +486,19 @@ void DisplayParameterName(signed char *index_group, signed char *number){
 	key.digitData[2] = Num_code[buff/10];	//Can't use Num_code[*number/10]
 	key.digitData[3] = Num_code[buff%10];	//Can't use Num_code[*number%10] due to *number is updated since top line
 
+	//Update MB Address
+	SetParameterMBAddress();
+
 }
 
-void DisplayParameterValue(unsigned short mb_value, unsigned char decimal){
+void DisplayParameterValue(unsigned short *mb_value, unsigned char *decimal){
 	//Check flag
-	if(decimal==16){
+	if(*decimal==16){
 		//HEX display
-		DisplayHEX(mb_value);
+		DisplayHEX(*mb_value);
 	}else{
 		//DEC display
-		DisplayDEC(mb_value, decimal);
+		DisplayDEC(*mb_value, *decimal);
 	}
 }
 
@@ -588,10 +602,22 @@ void SetUpDown(signed char flag){
 	case 2: //Change parameter value
 		//Check read only bit
 		if(!key.parameter.detail.rw){ return; }
-		//Change value and display
+		//Change value
 		key.mb_buffer = key.parameter.detail.data;
 		ChangeValue(flag, key.parameter.detail.min, key.parameter.detail.max);
-		DisplayParameterValue(key.mb_buffer, key.parameter.detail.dotFormat);
+		key.parameter.detail.data = (unsigned short)key.mb_buffer;
+		//Set Size Address?
+		if(key.parameter.detail.addr==SET_SIZE_ADDR)
+		{
+			//Read Size Inverter Name
+			Set_MB_Special(Fn_ReadSizeInvName, key.parameter.detail.data);
+			mbCon.interval_time = 0;
+		}
+		else
+		{
+			//Show Parameter Value
+			DisplayParameterValue(&key.parameter.detail.data, &key.parameter.detail.dotFormat);
+		}
 		break;
 	default: //Change Set Point
 		//Allow?
@@ -603,7 +629,7 @@ void SetUpDown(signed char flag){
 		//Change value
 		key.mb_buffer = key.main_v[D_SP];
 		ChangeValue(flag, f_setDetail.min, f_setDetail.max);
-		key.main_v[D_SP] = key.mb_buffer;
+		key.main_v[D_SP] = (unsigned short)key.mb_buffer;
 		DisplayDEC(key.main_v[D_SP], f_setDetail.dotFormat);
 		//Write to MB
 		WriteSetPoint();
@@ -665,7 +691,6 @@ void SwitchCallback(unsigned char sw){
 		}
 		break;
 	case MOVE_BT:
-
 		//Operating Mode?
 		if(!key.mode.bit.function){
 			//Allow?
@@ -736,11 +761,9 @@ void SwitchCallback(unsigned char sw){
 		//Check state
 		switch(key.mode.bit.function){
 		case 1:
-			//Read Value from MB
+			//Read Current Parameter Value
 			key.mode.bit.read_mb = 1U; //Set flag
-			//Set MB address for reading
-//			mbG.group[2].start_address = table.address;
-//			mb.inverval_time = 0;
+			Set_MB_Special(Fn_ReadDetailAddr, key.parameter.detail.addr);
 			break;
 		case 2:
 			//Display last parameter
@@ -761,30 +784,15 @@ void SwitchCallback(unsigned char sw){
 	case SET_BT:
 		//Clear
 		key.mode.bit.count_move = 0;
-		//Check read only bit
-		//if(bitRead(table.edit_display, RW_BIT) || table.address>=20000){ return; }
-		//Clear time counter
 		key.time_up[T_SET] = 0;
 		key.time_up[T_BLINK] = 0;
 		//Check state
 		if(key.mode.bit.function==2){
-			/*
-			if(table.address>=10000){
-				unsigned char num = table.address-10000;
-				//Write to ROM
-				rom.data[num] = key.mb_buffer;
-				rom.exe_flag = WRITE_FLAG;
-				key.mode.bit.set = 1U; 	//Set flag for show SEt
-				//Update interval reading address for SP LED
-				if(num==F00){
-					mbG.group[3].start_address = PARA_F00[rom.data[F00]-1].address;
-				}
-			}else{
-				//Write to MB
-				WriteSingle(table.address, key.mb_buffer); //Action
-				key.mode.bit.write_mb = 1U; //Set flag
-			}
-			*/
+			//Read only?
+			if(!key.parameter.detail.rw){ return; }
+			//Write to MB
+			Set_MB_WriteSingle(key.parameter.detail.addr, key.parameter.detail.data); //Action
+			key.mode.bit.write_mb = 1U; //Set flag
 		}else if(!key.mode.bit.function && !key.mode.bit.display && !oSt.bit.trip){
 			//Save to ROM
 			//rom.data[SP_HZ] = set_point;
@@ -1053,7 +1061,7 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 					j = PARA_LEN;
 				}
 				//Set Group name and max
-				for(i=0; i<GROUP_LEN; i++){
+				for(i=0; i<GROUP_LEN-1; i++){
 					GROUP[i].name = GROUP_NAME[i];
 					if(i==GROUP_LEN-1){
 						GROUP[i].max = j;
@@ -1061,6 +1069,7 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 						GROUP[i].max = PARA_LEN;
 					}
 				}
+
 			}
 			//Next
 			Set_MB_Special(Fn_ReadConfigAddr, 0);
@@ -1068,25 +1077,6 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 		case Fn_ReadConfigAddr: //key.led.bit.run = 1U;
 			conAddr = mbSpec->config;
 			Set_MB_Special(Fn_ReadConfigD1Addr, 0);
-			/*
-			key.led.byte = 0;
-			switch(key.mode.bit.display){
-			case D_SP:
-				key.led.bit.sp = 1U;
-				DisplayDEC(conAddr.n_hz, 0);
-				break;
-			case D_D1:
-				DisplayDEC(conAddr.n_a, 0);
-				break;
-			case D_Hz:
-				key.led.bit.hz = 1U;
-				DisplayDEC(0, 0);
-				break;
-			case D_A:
-				key.led.bit.a = 1U;
-				DisplayDEC(0, 0);
-				break;
-			}*/
 			break;
 		case Fn_ReadConfigD1Addr: //key.led.bit.stop = 1U;
 			conD1Addr = mbSpec->configD1;
@@ -1097,12 +1087,14 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 			if(!key.mode.bit.function)
 			{
 				//Save 'F_set' detail
-				if(mbSpec->detail.addr == (memSize.ram_start+conAddr.f_set)){
+				if(mbSpec->detail.addr == SET_POINT_ADDR){
 					f_setDetail = mbSpec->detail;
+					//Initial Set point
+					key.main_v[D_SP] = f_setDetail.data;
 					//Set MB interval reading
 					mbG.group[0].start_address = memSize.ram_start;	//Main
 					mbG.group[0].length = GetMaxValueOfArray((unsigned char*)&conAddr, 2, sizeof(conAddr))+1;
-					mbG.group[1].start_address = memSize.rom_start;	//A-00
+					mbG.group[1].start_address = A00_ADDR;	//A-00
 					mbG.group[1].length = 1;
 					mbG.total = 2;
 					mbG.counter = 0;
@@ -1112,30 +1104,47 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 			}
 			else
 			{
-				//Save parameter detail
-				key.parameter.detail = mbSpec->detail;
-				key.main_v[D_SP] = key.parameter.detail.data;
-				//Show Parameter Value
-				DisplayParameterValue(key.parameter.detail.data, key.parameter.detail.dotFormat);
-				//Set flag
-				key.mode.bit.function = 2;
-				//Back to Interval reading
-				mbCon.next_fn = Fn_ReadHolding;
+				if(mbSpec->detail.addr == key.parameter.detail.addr){
+					//Save parameter detail
+					key.parameter.detail = mbSpec->detail;
+					//Special Address?
+					if(key.parameter.detail.addr==SET_SIZE_ADDR)
+					{
+						//Read size inverter name
+						Set_MB_Special(Fn_ReadSizeInvName, key.parameter.detail.data);
+						mbCon.interval_time = 0;
+					}
+					else if(key.parameter.detail.addr==VERSION_ADDR)
+					{
+						//Read Firmware name
+						Set_MB_Special(Fn_ReadFirmwareName, 0);
+						mbCon.interval_time = 0;
+					}
+					else
+					{
+						//Show Parameter Value
+						DisplayParameterValue(&key.parameter.detail.data, &key.parameter.detail.dotFormat);
+						//Set flag
+						key.mode.bit.function = 2;
+						//Back to Interval reading
+						mbCon.next_fn = Fn_ReadHolding;
+					}
+				}
 			}
 			break;
 		case Fn_ReadHolding: //key.led.bit.hz = 1U;
 			//Ready
 			key.mode.bit.ready = 1;
 			//Set MB interval reading for display 1
-			if(mb->request == memSize.rom_start){
+			if(mb->request == A00_ADDR){
 				key.A00 = mb->response[0];
-				mbG.group[1].start_address = memSize.ram_start+conD1Addr.d[key.A00];
+				mbG.group[1].start_address = DISPLAY1_ADDR;
 				mbG.group[1].length = 1;
 			}
 			//Interval Checking
 			if(mb->request == memSize.ram_start)
 			{
-				/*/Fault
+				//Fault
 				if(mb->response[conAddr.fault]){
 					//Read Fault code
 					Set_MB_Special(Fn_ReadFaultName, mb->response[conAddr.fault]);
@@ -1144,7 +1153,7 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 				else{
 					oSt.bit.trip = 0;	//Clear
 					mbCon.next_fn = Fn_ReadHolding;
-				}*/
+				}
 				//Update Main Display
 				oSt.word = mb->response[conAddr.operation];	//Status
 				//if(!key.mode.bit.editing && !key.mode.bit.count_move){ key.main_v[D_SP] = mb->response[conAddr.f_set]; }//Set point
@@ -1185,10 +1194,13 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 			mbCon.next_fn = Fn_ReadHolding;
 			break;
 		case Fn_ReadSizeInvName:
-			DisplayCode(mbSpec->segment.dg3, mbSpec->segment.dg2, mbSpec->segment.dg1, mbSpec->segment.dg0);
-			break;
 		case Fn_ReadFirmwareName:
-			DisplayCode(mbSpec->segment.dg3, mbSpec->segment.dg2, mbSpec->segment.dg1, mbSpec->segment.dg0);
+			if(key.mode.bit.function){
+				DisplayCode(mbSpec->segment.dg3, mbSpec->segment.dg2, mbSpec->segment.dg1, mbSpec->segment.dg0);
+				key.mode.bit.function = 2;
+			}
+			//Back to Reading
+			mbCon.next_fn = Fn_ReadHolding;
 			break;
 		case Fn_WriteSingle:
 			//Check flag
@@ -1199,8 +1211,14 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 				key.mode.bit.set = 1U; 		//Set flag for show SEt
 			}
 
+			//Update Display1 Address
+			if(mb->response[0]==A00_ADDR){
+				key.A00 = mb->response[1];
+				mbG.group[1].start_address = DISPLAY1_ADDR;
+			}
+
 			//Verify 'set point' value
-			if(mb->request==SET_POINT_ADDR)
+			if(mb->response[0]==SET_POINT_ADDR)
 			{
 				key.main_v[D_SP] = mb->response[1];
 			}
@@ -1226,9 +1244,17 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 	}
 	else
 	{
-		unsigned short d = (unsigned short)mb->fn<<8 | mb->error;	//FFEE by FF = Function Code, EE = Error Code
-		DisplayHEX(d);
+
+//		unsigned short d = (unsigned short)mb->fn<<8 | mb->error;	//FFEE by FF = Function Code, EE = Error Code
+//		DisplayHEX(d);
+//		mbCon.interval_time = INTERVAL_STOP;
+
+		//Back to Interval Reading
 		mbCon.interval_time = INTERVAL_STOP;
+		if(mbCon.next_fn == Fn_WriteSingle && key.mode.bit.ready){
+			mbCon.next_fn = Fn_ReadHolding;
+		}
+
 	}
 
 	//Back to Interval Reading
