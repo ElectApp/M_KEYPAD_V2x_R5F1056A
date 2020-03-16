@@ -23,7 +23,7 @@
 * Device(s)    : R5F1056A
 * Tool-Chain   : CCRL
 * Description  : This file implements main function.
-* Creation Date: 10/3/2563
+* Creation Date: 14-Mar-20
 ***********************************************************************************************************************/
 
 /***********************************************************************************************************************
@@ -37,7 +37,7 @@ Includes
 #include "r_cg_sau.h"
 /* Start user code for include. Do not edit comment generated here */
 #include "u_keypad.h"
-//#include "u_modbus2.h"
+#include "u_data_flash2.h"		//Data Flash
 /* End user code. Do not edit comment generated here */
 #include "r_cg_userdefine.h"
 
@@ -66,7 +66,8 @@ void main(void)
     /* Start user code. Do not edit comment generated here */
     while (1U)
     {
-        ;
+    	//Data flash handle
+    	//DF_Handle();
     }
     /* End user code. Do not edit comment generated here */
 }
@@ -80,7 +81,12 @@ static void R_MAIN_UserInit(void)
 {
     /* Start user code. Do not edit comment generated here */
     EI();
+
+    //DF_Read();					//Load Data Flash, Call this function in the first!!
+
     R_UART1_Start();			//UART
+
+    DF_Read();					//Load Data Flash, Don't call before Start UART
 
     InitialKeypad();			//Keypad
 
@@ -90,4 +96,9 @@ static void R_MAIN_UserInit(void)
 }
 
 /* Start user code for adding. Do not edit comment generated here */
+
+
+
+
+
 /* End user code. Do not edit comment generated here */

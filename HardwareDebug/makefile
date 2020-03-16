@@ -84,7 +84,8 @@ M_KEYPAD_V2x_R5F1056A.mot: $(LINKER_OUTPUT_OUTPUTS)
 	@echo.
 
 
-M_KEYPAD_V2x_R5F1056A.abs: $(OBJS)  $(ALL_ASMS)
+M_KEYPAD_V2x_R5F1056A.abs: $(OBJS)  $(ALL_ASMS)  \
+D:\M_Keypad_9-Mar-2020\Code\M_KEYPAD_V2x_R5F1056A\data_flash\pfdl.lib
 	@echo 'Invoking: Linker'
 	@echo LinkerM_KEYPAD_V2x_R5F1056A.tmp=
 	@sed -e "s/^/    /" "LinkerM_KEYPAD_V2x_R5F1056A.tmp"

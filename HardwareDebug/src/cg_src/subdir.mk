@@ -16,6 +16,7 @@ C_SRCS += \
 ../src/cg_src/r_cg_systeminit.c \
 ../src/cg_src/r_cg_wdt.c \
 ../src/cg_src/r_cg_wdt_user.c \
+../src/cg_src/u_data_flash2.c \
 ../src/cg_src/u_keypad.c \
 ../src/cg_src/u_modbus2.c 
 
@@ -32,6 +33,7 @@ src/cg_src/r_cg_sau_user.obj \
 src/cg_src/r_cg_systeminit.obj \
 src/cg_src/r_cg_wdt.obj \
 src/cg_src/r_cg_wdt_user.obj \
+src/cg_src/u_data_flash2.obj \
 src/cg_src/u_keypad.obj \
 src/cg_src/u_modbus2.obj 
 
@@ -48,6 +50,7 @@ src/cg_src/r_cg_sau_user.d \
 src/cg_src/r_cg_systeminit.d \
 src/cg_src/r_cg_wdt.d \
 src/cg_src/r_cg_wdt_user.d \
+src/cg_src/u_data_flash2.d \
 src/cg_src/u_keypad.d \
 src/cg_src/u_modbus2.d 
 

@@ -7,9 +7,8 @@
 
 //=========== Library =========//
 #include "r_cg_macrodriver.h"					///< PORT
-#include "r_cg_sau.h"
-#include "u_modbus2.h"
 #include "u_keypad.h"
+#include "u_data_flash2.h"
 
 //=========== Button Input Pin ==============//
 #define SW_LINE1			P12_bit.no2
@@ -112,7 +111,9 @@ MB_GROUP mbG;
 
 //Other
 extern unsigned short ms_counter;
-unsigned char test = 0, index = 0;
+
+//================ Data Flash ============//
+extern ROM_DATA rom;
 
 
 //===================== Program ============//
@@ -133,6 +134,7 @@ void InitialKeypad(void){
 	//Clear
 	key.last_sw = 0;	//Last SW
 	key.mode.word = 0;  //Function Mode
+
 
     //Initial and start MB
     mbCon.slave_id = 1;
@@ -193,7 +195,6 @@ void LoopDisplay2(unsigned char state_off){
 	}
 }
 
-
 void RunDisplay(void){
 
 	//Check blink flag
@@ -234,7 +235,7 @@ void RunDisplay(void){
 //  Developed By: Somrat
 
 /***********************************************************************/
-void SetNumberDisplay(unsigned char Hex_Dec, float Data, unsigned char Full_display, unsigned char Dot_count, unsigned char Digit_total)
+void SetNumberDisplay(unsigned char Hex_Dec, unsigned short Data, unsigned char Full_display, unsigned char Dot_count, unsigned char Digit_total)
 {	//Hex_Dec = 0 (Display Hex number), 1 (Display Decimal number)
 	//Data is the information we want to display at keypad.
 	//Full_display = 0(Show only data at keypad), 1(Show 4 Digit at keypad.)
@@ -246,12 +247,11 @@ void SetNumberDisplay(unsigned char Hex_Dec, float Data, unsigned char Full_disp
 	char i, HDG_flag;
 	unsigned short buff;
 	float tmp;
-	unsigned short Data_buff	=	(unsigned short)Data;
+	unsigned short Data_buff	=	Data;
 
 	HDG_flag=0;
 	//Clear
 	for(i=0; i<4; i++)	key.digitData[i]=0;
-
 
 //Hex display
 	if(Hex_Dec==0)
@@ -388,6 +388,7 @@ DG4:	buff=Data_buff;
 		}
 
 	}
+
 
 }
 
@@ -687,7 +688,10 @@ void SwitchCallback(unsigned char sw){
 			key.led.bit.func = 0;
 			key.mode.bit.function = 0;
 			//Back to Operating mode
-			DisplayMain(); //Main
+			//Re-read Set Point detail
+			Set_MB_Special(Fn_ReadDetailAddr, SET_POINT_ADDR);
+			//Main
+			DisplayMain();
 		}
 		break;
 	case MOVE_BT:
@@ -795,8 +799,9 @@ void SwitchCallback(unsigned char sw){
 			key.mode.bit.write_mb = 1U; //Set flag
 		}else if(!key.mode.bit.function && !key.mode.bit.display && !oSt.bit.trip){
 			//Save to ROM
-			//rom.data[SP_HZ] = set_point;
-			//rom.exe_flag = WRITE_FLAG;
+			rom.data[RI_SP] = key.main_v[D_SP];
+			//rom.exe_flag = ROM_Write;
+			DF_Write();
 			//Write to MB
 			WriteSetPoint();
 			key.mode.bit.write_mb = 1U; //Set flag
@@ -1080,7 +1085,15 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 			break;
 		case Fn_ReadConfigD1Addr: //key.led.bit.stop = 1U;
 			conD1Addr = mbSpec->configD1;
-			Set_MB_Special(Fn_ReadDetailAddr, memSize.ram_start+conAddr.f_set);
+			//Set MB for Interval Reading
+			mbG.group[0].start_address = memSize.ram_start;	//Main
+			mbG.group[0].length = GetMaxValueOfArray((unsigned char*)&conAddr, 2, sizeof(conAddr))+1;
+			mbG.group[1].start_address = A00_ADDR;	//A-00
+			mbG.group[1].length = 1;
+			mbG.total = 2;
+			mbG.counter = 0;
+			//Read Set Point detail
+			Set_MB_Special(Fn_ReadDetailAddr, SET_POINT_ADDR);
 			break;
 		case Fn_ReadDetailAddr:
 			//Setting mode?
@@ -1090,16 +1103,18 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 				if(mbSpec->detail.addr == SET_POINT_ADDR){
 					f_setDetail = mbSpec->detail;
 					//Initial Set point
-					key.main_v[D_SP] = f_setDetail.data;
-					//Set MB interval reading
-					mbG.group[0].start_address = memSize.ram_start;	//Main
-					mbG.group[0].length = GetMaxValueOfArray((unsigned char*)&conAddr, 2, sizeof(conAddr))+1;
-					mbG.group[1].start_address = A00_ADDR;	//A-00
-					mbG.group[1].length = 1;
-					mbG.total = 2;
-					mbG.counter = 0;
-					//Start MB F#3
-					mbCon.next_fn = Fn_ReadHolding;
+					if(rom.exe_flag == ROM_Factory){
+						//Use Default Value
+						key.main_v[D_SP] = f_setDetail.def;
+						//Save ROM
+						rom.data[RI_SP] = key.main_v[D_SP];
+						DF_Write();
+					}else{
+						//Use value from ROM
+						key.main_v[D_SP] = rom.data[RI_SP];
+					}
+					//Write Set point to MB
+					WriteSetPoint();
 				}
 			}
 			else
@@ -1144,7 +1159,9 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 			//Interval Checking
 			if(mb->request == memSize.ram_start)
 			{
-				//Fault
+				//Status
+				oSt.word = mb->response[conAddr.operation];
+				/*/Fault
 				if(mb->response[conAddr.fault]){
 					//Read Fault code
 					Set_MB_Special(Fn_ReadFaultName, mb->response[conAddr.fault]);
@@ -1153,11 +1170,12 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 				else{
 					oSt.bit.trip = 0;	//Clear
 					mbCon.next_fn = Fn_ReadHolding;
-				}
+				}*/
 				//Update Main Display
-				oSt.word = mb->response[conAddr.operation];	//Status
-				//if(!key.mode.bit.editing && !key.mode.bit.count_move){ key.main_v[D_SP] = mb->response[conAddr.f_set]; }//Set point
-				key.main_v[D_SP] = mb->response[conAddr.f_set];
+//				if(!key.mode.bit.editing && !key.mode.bit.count_move){
+//					key.main_v[D_SP] = mb->response[conAddr.f_set]; 	//Set point
+//				}
+				//key.main_v[D_SP] = mb->response[conAddr.f_set];
 				key.main_v[D_RUN] = mb->response[conAddr.f_run]; //Running
 				key.main_v[D_Hz] = mb->response[conAddr.hz];	 //Hz
 				key.main_v[D_A] = mb->response[conAddr.a];		 //A

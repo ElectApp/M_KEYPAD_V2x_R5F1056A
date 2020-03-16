@@ -8,6 +8,9 @@
 #ifndef CG_SRC_U_KEYPAD_H_
 #define CG_SRC_U_KEYPAD_H_
 
+//=============== Library =================//
+#include "u_modbus2.h"
+
 //=============== Segment Value ================//
 #define	DG_A		0xF6		//	A
 #define DG_b		0x3E		//	b
@@ -178,8 +181,6 @@ typedef struct{
 	unsigned char max;			//The final parameter number
 }para_g;
 
-//========= Extern ==========//
-extern const uint8_t SOFT_VER;
 
 //========= Global Function ==========//
 void InitialKeypad(void);	//Initial one time

@@ -1,13 +1,13 @@
-Renesas Optimizing Linker (W3.01.00 )             14-Mar-2020 15:22:53
+Renesas Optimizing Linker (W3.01.00 )             16-Mar-2020 16:18:52
 
 *** Options ***
 
 -subcommand=LinkerM_KEYPAD_V2x_R5F1056A.tmp
 -device="C:\Renesas\e2_studio\DebugComp\\RL78\RL78\Common\DR5F1056A.DVF"
+-library="D:\M_Keypad_9-Mar-2020\Code\M_KEYPAD_V2x_R5F1056A\data_flash\pfdl.lib"
 -list="M_KEYPAD_V2x_R5F1056A.map"
 -nooptimize
 -entry=_start
--auto_section_layout
 -security_id=00000000000000000000
 -user_opt_byte=FFFFF0
 -ocdbg=04
@@ -25,11 +25,13 @@ Renesas Optimizing Linker (W3.01.00 )             14-Mar-2020 15:22:53
 -input=".\src/cg_src\r_cg_systeminit.obj"
 -input=".\src/cg_src\r_cg_wdt.obj"
 -input=".\src/cg_src\r_cg_wdt_user.obj"
+-input=".\src/cg_src\u_data_flash2.obj"
 -input=".\src/cg_src\u_keypad.obj"
 -input=".\src/cg_src\u_modbus2.obj"
 -library="C:\Program Files (x86)\Renesas Electronics\CS+\CC\CC-RL\V1.08.00\lib\rl78em4s.lib"
 -library="C:\Program Files (x86)\Renesas Electronics\CS+\CC\CC-RL\V1.08.00\lib\rl78em4r.lib"
 -library="C:\Program Files (x86)\Renesas Electronics\CS+\CC\CC-RL\V1.08.00\lib\malloc_n.lib"
+-start=PFDL_COD/0100,.const,.text,.data,.sdata,.RLIB,.SLIB,.textf,.constf/02000,.dataR,.bss/0FF988,.sdataR,.sbss/0FFE20
 -output="M_KEYPAD_V2x_R5F1056A.abs"
 -debug
 -nocompress
@@ -45,31 +47,33 @@ Renesas Optimizing Linker (W3.01.00 )             14-Mar-2020 15:22:53
 SECTION                            START      END         SIZE   ALIGN
 .vect
                                   00000000  0000007f        80   0
-.constf
-                                  00000080  00000080         0   2
-.sdata
-                                  00000080  00000080         0   2
-.data
-                                  00000082  00000085         4   2
 .option_byte
                                   000000c0  000000c3         4   1
 .security_id
                                   000000c4  000000cd         a   1
-.SLIB
-                                  000000c4  000000c4         0   1
-.text
-                                  000000ce  000001fe       131   1
-.textf
-                                  000001ff  00001a47      1849   1
-.RLIB
-                                  00001a48  00001ca1       25a   1
+PFDL_COD
+                                  00000100  0000018d        8e   2
 .const
                                   00002000  0000222b       22c   2
-.bss
-                                  000ff900  000ffd2b       42c   2
+.text
+                                  0000222c  0000235c       131   1
+.data
+                                  0000235e  00002361         4   2
+.sdata
+                                  00002362  00002362         0   2
+.RLIB
+                                  00002362  00002530       1cf   1
+.SLIB
+                                  00002531  00002531         0   1
+.textf
+                                  00002531  00003e81      1951   1
+.constf
+                                  00003e82  00003e82         0   2
 .dataR
-                                  000ffd2c  000ffd2f         4   2
-.sbss
-                                  000ffe20  000ffe20         0   2
+                                  000ff988  000ff98b         4   2
+.bss
+                                  000ff98c  000ffdc9       43e   2
 .sdataR
+                                  000ffe20  000ffe20         0   2
+.sbss
                                   000ffe20  000ffe20         0   2

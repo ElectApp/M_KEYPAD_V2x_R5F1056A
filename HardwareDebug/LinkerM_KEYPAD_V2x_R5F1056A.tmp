@@ -1,8 +1,8 @@
 -device="C:\Renesas\e2_studio\DebugComp\\RL78\RL78\Common\DR5F1056A.DVF"
+-library="D:\M_Keypad_9-Mar-2020\Code\M_KEYPAD_V2x_R5F1056A\data_flash\pfdl.lib"
 -list="M_KEYPAD_V2x_R5F1056A.map"
 -nooptimize
 -entry=_start
--auto_section_layout
 -security_id=00000000000000000000
 -user_opt_byte=FFFFF0
 -ocdbg=04
@@ -20,11 +20,13 @@
 -input=".\src/cg_src\r_cg_systeminit.obj"
 -input=".\src/cg_src\r_cg_wdt.obj"
 -input=".\src/cg_src\r_cg_wdt_user.obj"
+-input=".\src/cg_src\u_data_flash2.obj"
 -input=".\src/cg_src\u_keypad.obj"
 -input=".\src/cg_src\u_modbus2.obj"
 -library="C:\Program Files (x86)\Renesas Electronics\CS+\CC\CC-RL\V1.08.00\lib\rl78em4s.lib"
 -library="C:\Program Files (x86)\Renesas Electronics\CS+\CC\CC-RL\V1.08.00\lib\rl78em4r.lib"
 -library="C:\Program Files (x86)\Renesas Electronics\CS+\CC\CC-RL\V1.08.00\lib\malloc_n.lib"
+-start=PFDL_COD/0100,.const,.text,.data,.sdata,.RLIB,.SLIB,.textf,.constf/02000,.dataR,.bss/0FF988,.sdataR,.sbss/0FFE20
 -output="M_KEYPAD_V2x_R5F1056A.abs"
 -debug
 -nocompress

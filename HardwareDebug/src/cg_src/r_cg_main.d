@@ -15,5 +15,9 @@ src/cg_src/r_cg_main.obj\ src/cg_src/r_cg_main.d: ../src/cg_src/r_cg_sau.h
 ../src/cg_src/r_cg_sau.h:
 src/cg_src/r_cg_main.obj\ src/cg_src/r_cg_main.d: ../src/cg_src/u_keypad.h
 ../src/cg_src/u_keypad.h:
+src/cg_src/r_cg_main.obj\ src/cg_src/r_cg_main.d: ../src/cg_src/u_modbus2.h
+../src/cg_src/u_modbus2.h:
+src/cg_src/r_cg_main.obj\ src/cg_src/r_cg_main.d: ../src/cg_src/u_data_flash2.h
+../src/cg_src/u_data_flash2.h:
 src/cg_src/r_cg_main.obj\ src/cg_src/r_cg_main.d: ../src/cg_src/r_cg_userdefine.h
 ../src/cg_src/r_cg_userdefine.h:
