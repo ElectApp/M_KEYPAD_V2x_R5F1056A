@@ -68,7 +68,7 @@ unsigned char lastPass[4];		//Save sequence of button that user press for checki
 unsigned char pass_count;
 
 //============================== Other ============================//
-const unsigned char SOFT_VER = 100;		//Software Version
+const unsigned char SOFT_VER = 110;		//Software Version
 const unsigned char PARA_LEN = 50;		//Number of parameter per group
 enum{
 	G_A,
@@ -88,7 +88,7 @@ para_g GROUP[G_MAX];
 
 KEYPAD_DATA key;		//Keypad
 O_STATUS oSt;			//Storage Driver Status
-O_COMMAND oCom;			//Storage Driver Command
+//O_COMMAND oCom;			//Storage Driver Command
 
 //=============== MODBUS ==============//
 #define SET_POINT_ADDR				memSize.ram_start+conAddr.f_set
@@ -1103,7 +1103,7 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 				if(mbSpec->detail.addr == SET_POINT_ADDR){
 					f_setDetail = mbSpec->detail;
 					//Initial Set point
-					if(rom.exe_flag == ROM_Factory){
+					if(rom.exe_flag == ROM_Factory || rom.data[RI_SP]>f_setDetail.max || rom.data[RI_SP]<f_setDetail.min){
 						//Use Default Value
 						key.main_v[D_SP] = f_setDetail.def;
 						//Save ROM
@@ -1161,7 +1161,7 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 			{
 				//Status
 				oSt.word = mb->response[conAddr.operation];
-				/*/Fault
+				//Fault
 				if(mb->response[conAddr.fault]){
 					//Read Fault code
 					Set_MB_Special(Fn_ReadFaultName, mb->response[conAddr.fault]);
@@ -1170,7 +1170,7 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 				else{
 					oSt.bit.trip = 0;	//Clear
 					mbCon.next_fn = Fn_ReadHolding;
-				}*/
+				}
 				//Update Main Display
 //				if(!key.mode.bit.editing && !key.mode.bit.count_move){
 //					key.main_v[D_SP] = mb->response[conAddr.f_set]; 	//Set point
