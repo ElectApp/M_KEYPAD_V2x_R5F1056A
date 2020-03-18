@@ -135,6 +135,8 @@ void InitialKeypad(void){
 	//Clear
 	key.last_sw = 0;	//Last SW
 	key.mode.word = 0;  //Function Mode
+	key.double_sw = 0;
+	key.count_double_sw = 0;
 
 
     //Initial and start MB

@@ -77,16 +77,16 @@ typedef union {
 }DIGIT_BLINK;
 
 typedef union {
-	unsigned short word;
+	unsigned char byte;
 	struct {
-		unsigned short FUNC 	:2;			//Bit0: SW1
-		unsigned short MOVE		:2;			//Bit1: SW2
-		unsigned short UP		:2;			//Bit2: SW3
-		unsigned short STOP_RST	:2;			//Bit3: SW4
-		unsigned short DOWN		:2;			//Bit4: SW5
-		unsigned short SET		:2;			//Bit5: SW6
-		unsigned short ENTER	:2;			//Bit6: SW7
-		unsigned short RUN		:2;			//Bit7: SW8
+		unsigned char FUNC 		:1;			//Bit0: SW1
+		unsigned char MOVE		:1;			//Bit1: SW2
+		unsigned char UP		:1;			//Bit2: SW3
+		unsigned char STOP_RST	:1;			//Bit3: SW4
+		unsigned char DOWN		:1;			//Bit4: SW5
+		unsigned char SET		:1;			//Bit5: SW6
+		unsigned char ENTER		:1;			//Bit6: SW7
+		unsigned char RUN		:1;			//Bit7: SW8
 	} bit;
 }SW_DATA;
 
