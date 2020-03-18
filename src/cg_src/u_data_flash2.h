@@ -12,7 +12,7 @@
 
 typedef enum{
 	RI_SP=0,
-	RI_CRC,
+	RI_CRC,		//CRC
 	RI_LEN,
 }ROM_DATA_INDEX;
 
