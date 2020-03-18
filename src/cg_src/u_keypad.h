@@ -37,18 +37,6 @@
 #define DG_4		0xB2		//	4
 #define DG_			0x10		//	-
 
-//Button on keypad
-typedef enum{
-	FUNC_BT = 1,
-	MOVE_BT,
-	UP_BT,
-	STR_BT,
-	DOWN_BT,
-	SET_BT,
-	ENTER_BT,
-	RUN_BT
-}BUTTON_TYPE;
-
 typedef union {
 	unsigned char byte;
 	struct {
@@ -76,16 +64,16 @@ typedef union {
 }DIGIT_BLINK;
 
 typedef union {
-	unsigned short word;
+	unsigned char byte;
 	struct {
-		unsigned short FUNC 	:2;			//Bit0: SW1
-		unsigned short MOVE		:2;			//Bit1: SW2
-		unsigned short UP		:2;			//Bit2: SW3
-		unsigned short STOP_RST	:2;			//Bit3: SW4
-		unsigned short DOWN		:2;			//Bit4: SW5
-		unsigned short SET		:2;			//Bit5: SW6
-		unsigned short ENTER	:2;			//Bit6: SW7
-		unsigned short RUN		:2;			//Bit7: SW8
+		unsigned char FUNC 		:1;			//Bit0: SW1
+		unsigned char MOVE		:1;			//Bit1: SW2
+		unsigned char UP		:1;			//Bit2: SW3
+		unsigned char STOP_RST	:1;			//Bit3: SW4
+		unsigned char DOWN		:1;			//Bit4: SW5
+		unsigned char SET		:1;			//Bit5: SW6
+		unsigned char ENTER		:1;			//Bit6: SW7
+		unsigned char RUN		:1;			//Bit7: SW8
 	} bit;
 }SW_DATA;
 
@@ -129,12 +117,8 @@ typedef enum{
 	D_MAX
 }MAIN_DISPLAY_INDEX;
 
-typedef enum{
-	FALSE = 0,
-	TRUE
-}BOOLEAN;
-
 typedef struct{
+
 	unsigned char digitData[4];			///< Current digit data on display, 0=DG4, 1=DG3, 2=DG2, 3=DG1 (Left to Right)
 	LED_DATA led;						///< LED on keypad
 	unsigned char current_digit_on;		///< Save current the digit that turn on, 4 = LED
@@ -154,8 +138,6 @@ typedef struct{
 	unsigned short main_v[D_MAX];		///< Save Main value: SP, Hz, A, D1
 	unsigned char mb_timeout;			///< Count MB timeout to display -tO-
 	unsigned char A00;					///< Save value of A00
-	unsigned char double_sw;			///< Save last button for detection double-click
-	unsigned char count_double_sw;		///< Count double-click
 } KEYPAD_DATA;
 
 //Control Command (1409)

@@ -44,14 +44,14 @@
 
 //=================== Push Button value match SW[][] (Convert name to Inverter's Keypad) ============================//
 
-//#define FUNC_BT			1
-//#define MOVE_BT			2
-//#define UP_BT				3
-//#define STR_BT			4
-//#define DOWN_BT			5
-//#define SET_BT			6
-//#define ENTER_BT			7
-//#define RUN_BT			8
+#define FUNC_BT			1
+#define MOVE_BT			2
+#define UP_BT			3
+#define STR_BT			4
+#define DOWN_BT			5
+#define SET_BT			6
+#define ENTER_BT		7
+#define RUN_BT			8
 
 // Button Position on keypad (KEY-AIR-ES00), EX. 1 = SW1 (ON/OFF) Use with SwitchCallback function
 const unsigned char SW[2][4] = 	{ 	{	ENTER_BT,	DOWN_BT,	UP_BT,	FUNC_BT		},
@@ -68,7 +68,7 @@ unsigned char lastPass[4];		//Save sequence of button that user press for checki
 unsigned char pass_count;
 
 //============================== Other ============================//
-const unsigned char SOFT_VER = 120;		//Version: Edit interval reading of running mode, reset fault, emergency stop. fix bug a group of parameter setting
+const unsigned char SOFT_VER = 100;		//Software Version
 const unsigned char PARA_LEN = 50;		//Number of parameter per group
 enum{
 	G_A,
@@ -88,7 +88,7 @@ para_g GROUP[G_MAX];
 
 KEYPAD_DATA key;		//Keypad
 O_STATUS oSt;			//Storage Driver Status
-O_COMMAND oCom;		//Storage Driver Command
+O_COMMAND oCom;			//Storage Driver Command
 
 //=============== MODBUS ==============//
 #define SET_POINT_ADDR				memSize.ram_start+conAddr.f_set
@@ -96,12 +96,11 @@ O_COMMAND oCom;		//Storage Driver Command
 #define DISPLAY1_ADDR				memSize.ram_start+conD1Addr.d[key.A00]
 #define SET_SIZE_ADDR				memSize.rom_start+conAddr.setSize
 #define VERSION_ADDR				memSize.rom_start+conAddr.softVer
-#define COMM_ADDR					memSize.ram_start+conAddr.operation
 #define WriteSetPoint()				Set_MB_WriteSingle(SET_POINT_ADDR, key.main_v[D_SP])
-#define WriteControlCommand(x)		Set_MB_WriteSingle(COMM_ADDR, x)
+#define WriteControlCommand(x)		Set_MB_WriteSingle(memSize.ram_start+conAddr.operation, (x))
 //Interval Time
 const unsigned short INTERVAL_STOP = 1000;
-const unsigned short INTERVAL_RUN = 1000;	//Changed by P'M 18/03/2020
+const unsigned short INTERVAL_RUN = 50;
 //Variable
 MB_CONFIG mbCon;
 MB_MEMORY_SIZE memSize;
@@ -664,13 +663,7 @@ unsigned char GetIndexStart(MB_DETAIL_ADDR *d){
 	return index;
 }
 
-void SwitchCallback(unsigned char sw, BOOLEAN isDoubleClicked){
-	//Clear
-	if(isDoubleClicked){
-		key.double_sw = 0;
-		key.count_double_sw = 0;
-	}
-	//Check SW
+void SwitchCallback(unsigned char sw){
 	switch(sw){
 	case FUNC_BT:
 		//Clear
@@ -823,13 +816,8 @@ void SwitchCallback(unsigned char sw, BOOLEAN isDoubleClicked){
 	case STR_BT:
 		//Allow?
 		if(key.mode.bit.function || !key.mode.bit.ready){ return; }
-		//Set Command
-		oCom.word = 0;
-		oCom.bit.stop_run = 0;
-		oCom.bit.emergency = isDoubleClicked;
-		oCom.bit.reset = oSt.bit.trip;
-		//Write to MB
-		WriteControlCommand(oCom.word);
+		//Stop
+		WriteControlCommand(0);
 		break;
 	}
 }
@@ -853,7 +841,7 @@ void CheckPassword(unsigned char sw){
 
 	//Back to Operation Mode
 	if(sw==FUNC_BT){
-		SwitchCallback(sw, FALSE);
+		SwitchCallback(sw);
 		return;
 	}
 
@@ -881,10 +869,11 @@ void CheckPassword(unsigned char sw){
 		//Set flag but auto clear at SwitchCallback(ENTER_BT)
 		key.mode.bit.unlock = 1;
 		//Unlock
-		SwitchCallback(ENTER_BT, FALSE);
+		SwitchCallback(ENTER_BT);
 	}
 
 }
+
 
 
 void HoldUpDownActive(unsigned char sw){
@@ -894,35 +883,24 @@ void HoldUpDownActive(unsigned char sw){
 		//Clear
 		key.time_up[T_HOLD] = 0;
 		//Callback
-		SwitchCallback(sw, FALSE);
+		SwitchCallback(sw);
 	}
 }
 
 void BlockHoldSwitch(unsigned char sw){
-	//Clear double-click
-	if(sw!=key.double_sw || (ms_counter-key.last_time)>500){
-		key.double_sw = 0;
-		key.count_double_sw = 0;
-		//key.led.bit.hz = 1U;
-	}
 	//Lock SW
 	if(ms_counter-key.last_time>100){
-		//Lock?
 		if(key.mode.bit.wait_unlock){
 			//Check Password
 			CheckPassword(sw);
 			//key.led.bit.run = 1;
 		}else{
-			//Count double-click
-			if(sw == key.double_sw){ key.count_double_sw++; }
 			//Callback
-			SwitchCallback(sw, (BOOLEAN)key.count_double_sw);
-			//DisplayDEC(key.count_double_sw, 0);
+			SwitchCallback(sw);
 		}
 	}
-	//Save
+	//Save time
 	key.last_time = ms_counter;
-	key.double_sw = sw;
 
 }
 
@@ -1088,7 +1066,7 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 					j = PARA_LEN;
 				}
 				//Set Group name and max
-				for(i=0; i<GROUP_LEN; i++){
+				for(i=0; i<GROUP_LEN-1; i++){
 					GROUP[i].name = GROUP_NAME[i];
 					if(i==GROUP_LEN-1){
 						GROUP[i].max = j;
@@ -1096,6 +1074,7 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 						GROUP[i].max = PARA_LEN;
 					}
 				}
+
 			}
 			//Next
 			Set_MB_Special(Fn_ReadConfigAddr, 0);
@@ -1124,7 +1103,7 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 				if(mbSpec->detail.addr == SET_POINT_ADDR){
 					f_setDetail = mbSpec->detail;
 					//Initial Set point
-					if(rom.exe_flag == ROM_Factory || rom.data[RI_SP]>f_setDetail.max || rom.data[RI_SP]<f_setDetail.min){
+					if(rom.exe_flag == ROM_Factory){
 						//Use Default Value
 						key.main_v[D_SP] = f_setDetail.def;
 						//Save ROM
@@ -1182,7 +1161,7 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 			{
 				//Status
 				oSt.word = mb->response[conAddr.operation];
-				//Fault
+				/*/Fault
 				if(mb->response[conAddr.fault]){
 					//Read Fault code
 					Set_MB_Special(Fn_ReadFaultName, mb->response[conAddr.fault]);
@@ -1191,7 +1170,7 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 				else{
 					oSt.bit.trip = 0;	//Clear
 					mbCon.next_fn = Fn_ReadHolding;
-				}
+				}*/
 				//Update Main Display
 //				if(!key.mode.bit.editing && !key.mode.bit.count_move){
 //					key.main_v[D_SP] = mb->response[conAddr.f_set]; 	//Set point
@@ -1261,12 +1240,6 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 			{
 				key.main_v[D_SP] = mb->response[1];
 			}
-
-			//Emergency Stop?
-//			if(mb->response[0]==COMM_ADDR)
-//			{
-//				if(mb->)
-//			}
 
 			//Back to Reading
 			mbCon.next_fn = Fn_ReadHolding;

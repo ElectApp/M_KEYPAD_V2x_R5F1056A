@@ -43,7 +43,7 @@
 #include "pfdl.h"
 #include "pfdl_types.h"
 #include "u_data_flash2.h"
-#include "u_keypad.h"
+//#include "u_keypad.h"
 
 pfdl_status_t  		pfdl_stt;
 pfdl_request_t		pfdl_req;
@@ -53,8 +53,8 @@ unsigned char create_flag = 0, open_flag = 0;
 ROM_DATA rom;
 //extern KEYPAD_DATA key;
 
-unsigned char data_flash_write(unsigned short* add_buf, unsigned short w_len);
-unsigned char data_flash_read(unsigned short* add_buf, unsigned short w_len);
+char data_flash_write(unsigned short* add_buf, short w_len);
+char data_flash_read(unsigned short* add_buf, short w_len);
 
 
 /**
@@ -100,7 +100,6 @@ void DF_Read(void){
 	rom.exe_flag = ROM_None;
 	//Read ROM
 	err = data_flash_read(rom.data, RI_LEN);
-	//DisplayHEX(err);
 	//Check CRC
 	crc = GetCRC((unsigned char*)rom.data, RI_CRC*2);
 	if(err || rom.data[RI_CRC]!=crc){
@@ -194,33 +193,34 @@ void FDL_Close(void)
 //***************************//
 // Write data flash function //
 //***************************//
-unsigned char data_flash_write(unsigned short* add_buf, unsigned short w_len){
-	unsigned char err = 0;
+char data_flash_write(unsigned short* add_buf,short w_len)
+{
+	char err = 0;
 
 	//initial//
-	pfdl_stt = PFDL_BUSY;
+	pfdl_stt=PFDL_BUSY;
 
 	//OPEN
 	FDL_Open();
 
 	//====BLANK CHECK COMMAND=== //
-	pfdl_req.command_enu = PFDL_CMD_BLANKCHECK_BYTES;	//blank_check
-	pfdl_req.index_u16 = 0;								//block 0 (always =1024 bytes/block)
-	pfdl_req.bytecount_u16 = 2*w_len;					//length.(words)
+	pfdl_req.command_enu	=PFDL_CMD_BLANKCHECK_BYTES;	//blank_check //
+	pfdl_req.index_u16	=0;				//block 0 (always =1024 bytes/block)//
+	pfdl_req.bytecount_u16	=2*w_len;			//length.(words)//
 	pfdl_stt=PFDL_Execute(&pfdl_req);
-	// wait for process end
+	// wait for process end //
 	while (pfdl_stt==PFDL_BUSY)
 	{
 	    pfdl_stt=PFDL_Handler();
 	}
 
-	//Check status oc check blank
+	//Check status oc check blank //
 	if(pfdl_stt==PFDL_OK  || pfdl_stt==PFDL_ERR_MARGIN  )
 	{
 
 		//===ERASE COMMAND ==//
-		pfdl_req.command_enu = PFDL_CMD_ERASE_BLOCK;	//blank_check
-		pfdl_req.index_u16 = 0;							//block 0 (always =1024 bytes/block)
+		pfdl_req.command_enu	=PFDL_CMD_ERASE_BLOCK;		//blank_check //
+		pfdl_req.index_u16	=0;				//block 0 (always =1024 bytes/block)//
 		pfdl_stt=PFDL_Execute(&pfdl_req);
 
 		// wait for process end //
@@ -229,15 +229,17 @@ unsigned char data_flash_write(unsigned short* add_buf, unsigned short w_len){
 			pfdl_stt=PFDL_Handler();
 		}
 
-		//check status of erase process //
+
+		//check status of erase processe //
 		if(pfdl_stt==PFDL_OK)	//erase completed //
 		{
 
+
 			// ===== WRITE COMMAND=====//
-			pfdl_req.command_enu = PFDL_CMD_WRITE_BYTES;	//write //
-			pfdl_req.index_u16 = 0;			//block 0 (always =1024 bytes/block)//
-			pfdl_req.bytecount_u16 = 2*w_len;		//length.(words)//
-			pfdl_req.data_pu08 = (pfdl_u08*)add_buf;	//specifics address buffer//
+			pfdl_req.command_enu	=PFDL_CMD_WRITE_BYTES;	//write //
+			pfdl_req.index_u16	=0;			//block 0 (always =1024 bytes/block)//
+			pfdl_req.bytecount_u16	=2*w_len;		//length.(words)//
+			pfdl_req.data_pu08	=(pfdl_u08*)add_buf;	//spacifics address buffer//
 			pfdl_stt=PFDL_Execute(&pfdl_req);
 
 			// wait for process end //
@@ -252,9 +254,9 @@ unsigned char data_flash_write(unsigned short* add_buf, unsigned short w_len){
 
 
 				//=== IVERIFY COMMAND====//
-				pfdl_req.command_enu = PFDL_CMD_IVERIFY_BYTES;	//write //
-				pfdl_req.index_u16 = 0;				//block 0 (always =1024 bytes/block)//
-				pfdl_req.bytecount_u16 = 2*w_len;			//length.(words)//
+				pfdl_req.command_enu	=PFDL_CMD_IVERIFY_BYTES;	//write //
+				pfdl_req.index_u16	=0;				//block 0 (always =1024 bytes/block)//
+				pfdl_req.bytecount_u16	=2*w_len;			//length.(words)//
 				pfdl_stt=PFDL_Execute(&pfdl_req);
 
 				// wait for process end //
@@ -301,30 +303,40 @@ unsigned char data_flash_write(unsigned short* add_buf, unsigned short w_len){
 //**************************//
 //read data flash function  //
 //**************************//
-unsigned char data_flash_read(unsigned short* add_buf, unsigned short w_len){
-	pfdl_u16    i;									//Index
-	pfdl_u08 u8Buf[sizeof(w_len)*2];				//Read buffer
+char data_flash_read(unsigned short* add_buf, short w_len)
+{
+	char err = 0;
 
-	//Open
+	//initial//
+	pfdl_stt = PFDL_BUSY;
+
+	//OPEN
 	FDL_Open();
 
-	//Read data
-	pfdl_req.command_enu = PFDL_CMD_READ_BYTES;		//Read
-	pfdl_req.index_u16 = 0;							//block 0 (always =1024 bytes/block)
-	pfdl_req.bytecount_u16 = w_len*2;				//length.(words)
-	pfdl_req.data_pu08 = u8Buf;
-	pfdl_stt = PFDL_Execute(&pfdl_req);
-
-	//Copy to result
-	for(i=0; i<w_len; i++){
-		add_buf[i] = u8Buf[i] | (u8Buf[i+1]<<8);
+	//read data //
+	pfdl_req.command_enu	=PFDL_CMD_READ_BYTES;	//Read //
+	pfdl_req.index_u16	=0;			//block 0 (always =1024 bytes/block)//
+	pfdl_req.bytecount_u16	=2*w_len;		//length.(words)//
+	pfdl_req.data_pu08	=(pfdl_u08*)add_buf;	//spacifics address buffer//
+	pfdl_stt=PFDL_Execute(&pfdl_req);
+	while(pfdl_stt==PFDL_BUSY)
+	{
+		pfdl_stt=PFDL_Handler();
 	}
 
-	//Close
+	if(pfdl_stt==PFDL_OK)
+	{	//read ok //
+		err=0;
+	}
+	else
+	{	// read error //
+		err=1;
+	}
+
+	//== Close data flash ==//
 	FDL_Close();
 
-	return (unsigned char)pfdl_stt;
-
+	return err ;
 }
 
 
