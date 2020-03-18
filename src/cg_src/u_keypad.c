@@ -44,15 +44,6 @@
 
 //=================== Push Button value match SW[][] (Convert name to Inverter's Keypad) ============================//
 
-//#define FUNC_BT			1
-//#define MOVE_BT			2
-//#define UP_BT				3
-//#define STR_BT			4
-//#define DOWN_BT			5
-//#define SET_BT			6
-//#define ENTER_BT			7
-//#define RUN_BT			8
-
 // Button Position on keypad (KEY-AIR-ES00), EX. 1 = SW1 (ON/OFF) Use with SwitchCallback function
 const unsigned char SW[2][4] = 	{ 	{	ENTER_BT,	DOWN_BT,	UP_BT,	FUNC_BT		},
 									{	RUN_BT,		SET_BT,		STR_BT,	MOVE_BT		}

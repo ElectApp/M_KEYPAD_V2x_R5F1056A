@@ -159,7 +159,7 @@ typedef struct{
 	unsigned char count_double_sw;		///< Count double-click
 } KEYPAD_DATA;
 
-//Control Command (1409)
+//Control Command
 typedef union{
 	unsigned short word;
 	struct {
@@ -175,7 +175,7 @@ typedef union{
 	} bit;
 }O_COMMAND;
 
-//Operating Status (1415)
+//Operating Status
 typedef union{
 	unsigned short word;
 	struct {
