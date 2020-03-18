@@ -88,7 +88,7 @@ para_g GROUP[G_MAX];
 
 KEYPAD_DATA key;		//Keypad
 O_STATUS oSt;			//Storage Driver Status
-O_COMMAND oCom;		//Storage Driver Command
+O_COMMAND oCom;			//Storage Driver Command
 
 //=============== MODBUS ==============//
 #define SET_POINT_ADDR				memSize.ram_start+conAddr.f_set
