@@ -61,7 +61,7 @@ typedef enum{
     MB_None = 0,
     MB_Ready,
     MB_SendEnd,
-    MB_ResponseEnd,
+    MB_ResponseEnd
 }MB_SATUS;
 
 typedef enum{
