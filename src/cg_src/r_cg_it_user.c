@@ -49,7 +49,7 @@ Global variables and functions
 ***********************************************************************************************************************/
 /* Start user code for global. Do not edit comment generated here */
 
-unsigned short ms_counter = 0;
+unsigned long ms_counter = 0;
 
 /* End user code. Do not edit comment generated here */
 
@@ -65,7 +65,7 @@ static void __near r_it_interrupt(void)
 
 	//Count
 	ms_counter++;
-	if(ms_counter>65000){ ms_counter = 0; }
+	if(ms_counter>4294967290){ ms_counter = 0; }
 
 	//Run MB
 	MB_Handle();

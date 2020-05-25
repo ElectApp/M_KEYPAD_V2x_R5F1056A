@@ -102,7 +102,7 @@ MB_DETAIL_ADDR f_setDetail;
 MB_GROUP mbG;
 
 //Other
-extern unsigned short ms_counter;
+extern unsigned long ms_counter;
 
 //================ Data Flash ============//
 extern ROM_DATA rom;
@@ -128,7 +128,6 @@ void InitialKeypad(void){
 	key.mode.word = 0;  //Function Mode
 	key.double_sw = 0;
 	key.count_double_sw = 0;
-
 
     //Initial and start MB
     mbCon.slave_id = 1;
@@ -881,15 +880,17 @@ void CheckPassword(unsigned char sw){
 
 
 void HoldUpDownActive(unsigned char sw){
-	//Active 0 -> 250 in 25s
+	//10: Active 0 -> 250 in 25s
+	//100: 0 -> 7 in 10s
 	key.time_up[T_HOLD]++;
-	if(key.time_up[T_HOLD]>10){
+	if(key.time_up[T_HOLD]>20){
 		//Clear
 		key.time_up[T_HOLD] = 0;
 		//Callback
 		SwitchCallback(sw, FALSE);
 	}
 }
+
 
 void BlockHoldSwitch(unsigned char sw){
 	//Clear double-click
@@ -898,8 +899,10 @@ void BlockHoldSwitch(unsigned char sw){
 		key.count_double_sw = 0;
 		//key.led.bit.hz = 1U;
 	}
-	//Lock SW
-	if(ms_counter-key.last_time>100){
+	//Lock SW, fixed bug SW not change
+	if((ms_counter-key.last_time)>100){
+		//Clear
+		key.time_up[T_HOLD] = 0;
 		//Lock?
 		if(key.mode.bit.wait_unlock){
 			//Check Password
@@ -912,14 +915,19 @@ void BlockHoldSwitch(unsigned char sw){
 			SwitchCallback(sw, (BOOLEAN)key.count_double_sw);
 			//DisplayDEC(key.count_double_sw, 0);
 		}
+	}else{
+		//Auto up/down
+		if(sw==UP_BT || sw==DOWN_BT){ HoldUpDownActive(sw); }
 	}
 	//Save
 	key.last_time = ms_counter;
 	key.double_sw = sw;
-
 }
 
 void SwitchModeSelector(unsigned char sw){
+	//Clear to start blink 'FUNC' led
+	key.debug_sw = 1U;
+	key.time_up[T_DEBUG] = 0;
 
 	//Filter
 	if(key.last_sw == sw){
@@ -942,11 +950,15 @@ void SwitchModeSelector(unsigned char sw){
 			}
 			*/
 
+			/*
 			if(sw==UP_BT || sw==DOWN_BT){
 				HoldUpDownActive(sw);
 			}else{
 				BlockHoldSwitch(sw);
 			}
+			*/
+
+			BlockHoldSwitch(sw);
 
 			//Clear stack
 			key.sw_stack = 0;
@@ -1039,6 +1051,19 @@ void RunKeypad(void){
 			SwitchModeSelector(SW[1][key.current_digit_on]);
 		}
 
+	}
+
+	//Blink 'FUNC' led for debug sw, 25-May-2020
+	if(key.debug_sw){
+		key.led.bit.func = ~key.mode.bit.function;
+		key.time_up[T_DEBUG]++;
+		if(key.time_up[T_DEBUG]>100){
+			key.led.bit.func = key.mode.bit.function;
+			if(key.time_up[T_DEBUG]>200){
+				key.time_up[T_DEBUG] = 0;
+				key.debug_sw = 0;
+			}
+		}
 	}
 
 

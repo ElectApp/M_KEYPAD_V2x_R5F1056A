@@ -40,13 +40,13 @@
 //Button on keypad
 typedef enum{
 	FUNC_BT = 1,
-	MOVE_BT,
-	UP_BT,
-	STR_BT,
-	DOWN_BT,
-	SET_BT,
-	ENTER_BT,
-	RUN_BT
+	MOVE_BT = 2,
+	UP_BT = 4,
+	STR_BT = 8,
+	DOWN_BT = 10,
+	SET_BT = 20,
+	ENTER_BT = 40,
+	RUN_BT = 80
 }BUTTON_TYPE;
 
 typedef union {
@@ -79,14 +79,14 @@ typedef union {
 typedef union {
 	unsigned char byte;
 	struct {
-		unsigned char FUNC 		:1;			//Bit0: SW1
-		unsigned char MOVE		:1;			//Bit1: SW2
-		unsigned char UP		:1;			//Bit2: SW3
-		unsigned char STOP_RST	:1;			//Bit3: SW4
-		unsigned char DOWN		:1;			//Bit4: SW5
-		unsigned char SET		:1;			//Bit5: SW6
-		unsigned char ENTER		:1;			//Bit6: SW7
-		unsigned char RUN		:1;			//Bit7: SW8
+		unsigned char FUNC 		:1;			//Bit0: SW1 = 1
+		unsigned char MOVE		:1;			//Bit1: SW2 = 2
+		unsigned char UP		:1;			//Bit2: SW3 = 4
+		unsigned char STR		:1;			//Bit3: SW4 = 8
+		unsigned char DOWN		:1;			//Bit4: SW5 = 10
+		unsigned char SET		:1;			//Bit5: SW6 = 20
+		unsigned char ENTER		:1;			//Bit6: SW7 = 40
+		unsigned char RUN		:1;			//Bit7: SW8 = 80
 	} bit;
 }SW_DATA;
 
@@ -116,6 +116,7 @@ typedef enum{
 	T_SET,
 	T_MOVE,
 	T_HOLD,
+	T_DEBUG,
 	T_MAX
 }TIME_UP_INDEX;
 
@@ -142,7 +143,7 @@ typedef struct{
 	unsigned short time_up[T_MAX];		///< 0 = Blink, 1 = SEt, 2 = Move timeout, 3 = Hold press time
 	unsigned char last_sw;				///< Save last switch active
 	unsigned short sw_stack;			///< Stack Same SW
-	unsigned short last_time;			///< Save last time that switch active
+	unsigned long last_time;			///< Save last time that switch active
 	HELD_FLAG mode;
 	struct {
 		MB_DETAIL_ADDR detail;
@@ -157,6 +158,7 @@ typedef struct{
 	unsigned char A00;					///< Save value of A00
 	unsigned char double_sw;			///< Save last button for detection double-click
 	unsigned char count_double_sw;		///< Count double-click
+	unsigned char debug_sw;
 } KEYPAD_DATA;
 
 //Control Command
