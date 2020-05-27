@@ -767,6 +767,7 @@ void SwitchCallback(unsigned char sw, BOOLEAN isDoubleClicked){
 			//Read Current Parameter Value
 			key.mode.bit.read_mb = 1U; //Set flag
 			Set_MB_Special(Fn_ReadDetailAddr, key.parameter.detail.addr);
+			key.digit_blink.byte = ~key.digit_blink.byte;
 			break;
 		case 2:
 			//Display last parameter
@@ -1321,7 +1322,7 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 	}
 
 	//Back to Interval Reading
-	if(mbCon.next_fn == Fn_ReadHolding)
+	if(!key.mode.bit.read_mb && mbCon.next_fn == Fn_ReadHolding)
 	{
 		Set_MB_ReadHolding(mbG.group[mbG.counter].start_address, mbG.group[mbG.counter].length);
 	}
