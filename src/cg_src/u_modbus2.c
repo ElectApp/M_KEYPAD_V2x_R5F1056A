@@ -24,9 +24,9 @@ typedef struct{
 
 
 //================ Variable ===============//
-MB_CONFIG *_mbCon;    	//Config
-MB_REQUEST mbReq;    	//Request message
-MB_RESPONE mbResp;   	//Response message
+MB_CONFIG *_mbCon;    				//Config
+MB_REQUEST mbReq;					//Request message
+MB_RESPONE mbResp;   				//Response message
 MB_SPECIAL mbSpec;
 
 unsigned char tx_rx[TX_RX_MAX]; //TX RX Buffer
@@ -105,7 +105,6 @@ void MB_Init(MB_CONFIG *mbCon, MB_CALLBACK *callback){
     _callback = callback;
 
 }
-
 
 void Set_MB_ReadHolding(unsigned short startAddress, unsigned short len){
     //Copy
@@ -423,10 +422,22 @@ void MB_Handle(void){
 	if(_mbCon->next_fn && _mbCon->status==MB_Ready){
 		count_up++;
 		//Wait 3.5T before send request
-		if(count_up > (_mbCon->t3_5 + _mbCon->interval_time)){
-			count_up = 0;
-			_mbCon->status = MB_None;
-			Send_MB_Request();
+		if(count_up > _mbCon->t3_5){
+			switch((MB_FUNCTION)_mbCon->next_fn)
+			{
+	        	case Fn_ReadHolding:
+	        		if(count_up > _mbCon->interval_time){
+	        			count_up = 0;
+	        			_mbCon->status = MB_None;
+	        			Send_MB_Request();
+	        		}
+	        		break;
+
+	        	default:
+	        		count_up = 0;
+	    			_mbCon->status = MB_None;
+	    			Send_MB_Request();
+			}
 		}
 	}else if(_mbCon->status == MB_SendEnd){
 		//Check response timeout
