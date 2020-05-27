@@ -767,7 +767,6 @@ void SwitchCallback(unsigned char sw, BOOLEAN isDoubleClicked){
 			//Read Current Parameter Value
 			key.mode.bit.read_mb = 1U; //Set flag
 			Set_MB_Special(Fn_ReadDetailAddr, key.parameter.detail.addr);
-			key.digit_blink.byte = ~key.digit_blink.byte;
 			break;
 		case 2:
 			//Display last parameter
