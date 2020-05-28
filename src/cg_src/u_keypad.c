@@ -59,7 +59,7 @@ unsigned char lastPass[4];		//Save sequence of button that user press for checki
 unsigned char pass_count;
 
 //============================== Other ============================//
-const unsigned char SOFT_VER = 120;		//Version: Edit interval reading of running mode, reset fault, emergency stop. fix bug a group of parameter setting
+const unsigned char SOFT_VER = 122;		//Version: Reduce delay time to action MB, Fix bug sometime not change after press Up/Down BT
 const unsigned char PARA_LEN = 50;		//Number of parameter per group
 enum{
 	G_A,
