@@ -46,8 +46,7 @@ void ClearU8Array(unsigned char *arr, unsigned short len){
     unsigned short l;
     for(l=0; l<len; l++){ arr[l] = 0; }
 }
-
-
+/*
 void Clear_MB_SPECIAL(MB_SPECIAL *sp){
     sp->memory.productID = 0;
     sp->memory.fault_len = 0;
@@ -85,6 +84,7 @@ void Clear_MB_SPECIAL(MB_SPECIAL *sp){
     sp->detail.min = 0;
     sp->detail.rw = 0;
 }
+*/
 
 void MB_Init(MB_CONFIG *mbCon, MB_CALLBACK *callback){
     //Clear
@@ -95,7 +95,7 @@ void MB_Init(MB_CONFIG *mbCon, MB_CALLBACK *callback){
     mbResp.response_len = 0;
     ClearU16Array(mbResp.response, MB_RESPONSE_MAX);
     count_up = 0;
-    Clear_MB_SPECIAL(&mbSpec);
+    //Clear_MB_SPECIAL(&mbSpec);
     //Drive Mode
     SetDR(1);
     //Config
@@ -103,7 +103,6 @@ void MB_Init(MB_CONFIG *mbCon, MB_CALLBACK *callback){
     _mbCon->t3_5 = 4;	 //9600 bps
     //Callback
     _callback = callback;
-
 }
 
 void Set_MB_ReadHolding(unsigned short startAddress, unsigned short len){

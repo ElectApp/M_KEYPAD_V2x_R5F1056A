@@ -5,6 +5,7 @@
 -input=".\src/cg_src\r_cg_it.obj"
 -input=".\src/cg_src\r_cg_it_user.obj"
 -input=".\src/cg_src\r_cg_main.obj"
+-input=".\src/cg_src\r_cg_pfdl.obj"
 -input=".\src/cg_src\r_cg_port.obj"
 -input=".\src/cg_src\r_cg_port_user.obj"
 -input=".\src/cg_src\r_cg_sau.obj"

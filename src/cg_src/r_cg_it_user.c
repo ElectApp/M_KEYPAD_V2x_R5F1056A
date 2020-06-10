@@ -23,7 +23,7 @@
 * Device(s)    : R5F1056A
 * Tool-Chain   : CCRL
 * Description  : This file implements device driver for IT module.
-* Creation Date: 14-Mar-20
+* Creation Date: 10-Jun-20
 ***********************************************************************************************************************/
 
 /***********************************************************************************************************************
@@ -32,6 +32,7 @@ Includes
 #include "r_cg_macrodriver.h"
 #include "r_cg_it.h"
 /* Start user code for include. Do not edit comment generated here */
+#include "r_cg_wdt.h"
 #include "u_keypad.h"
 #include "u_modbus2.h"
 /* End user code. Do not edit comment generated here */
@@ -62,6 +63,8 @@ unsigned long ms_counter = 0;
 static void __near r_it_interrupt(void)
 {
     /* Start user code. Do not edit comment generated here */
+	//Watch dog
+	R_WDT_Restart();
 
 	//Count
 	ms_counter++;

@@ -1,4 +1,4 @@
-Renesas Optimizing Linker (W3.01.00 )             28-May-2020 12:17:39
+Renesas Optimizing Linker (W3.01.00 )             10-Jun-2020 11:20:47
 
 *** Options ***
 
@@ -9,7 +9,7 @@ Renesas Optimizing Linker (W3.01.00 )             28-May-2020 12:17:39
 -nooptimize
 -entry=_start
 -security_id=00000000000000000000
--user_opt_byte=FFFFF0
+-user_opt_byte=7F53F0
 -ocdbg=04
 -input=".\generate\cstart.obj"
 -input=".\generate\stkinit.obj"
@@ -18,6 +18,7 @@ Renesas Optimizing Linker (W3.01.00 )             28-May-2020 12:17:39
 -input=".\src/cg_src\r_cg_it.obj"
 -input=".\src/cg_src\r_cg_it_user.obj"
 -input=".\src/cg_src\r_cg_main.obj"
+-input=".\src/cg_src\r_cg_pfdl.obj"
 -input=".\src/cg_src\r_cg_port.obj"
 -input=".\src/cg_src\r_cg_port_user.obj"
 -input=".\src/cg_src\r_cg_sau.obj"
@@ -56,23 +57,23 @@ PFDL_COD
 .const
                                   00002000  0000222b       22c   2
 .text
-                                  0000222c  00002371       146   1
+                                  0000222c  0000235b       130   1
 .data
-                                  00002372  00002377         6   2
+                                  0000235c  00002361         6   2
 .sdata
-                                  00002378  00002378         0   2
+                                  00002362  00002362         0   2
 .RLIB
-                                  00002378  00002546       1cf   1
+                                  00002362  00002530       1cf   1
 .SLIB
-                                  00002547  00002547         0   1
+                                  00002531  00002531         0   1
 .textf
-                                  00002547  00003fca      1a84   1
+                                  00002531  00003fc4      1a94   1
 .constf
-                                  00003fcc  00003fcc         0   2
+                                  00003fc6  00003fc6         0   2
 .dataR
                                   000ff988  000ff98d         6   2
 .bss
-                                  000ff98e  000ffdd3       446   2
+                                  000ff98e  000ffde1       454   2
 .sdataR
                                   000ffe20  000ffe20         0   2
 .sbss

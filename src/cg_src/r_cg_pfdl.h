@@ -18,79 +18,46 @@
 ***********************************************************************************************************************/
 
 /***********************************************************************************************************************
-* File Name    : r_cg_it.c
+* File Name    : r_cg_pfdl.h
 * Version      : Code Generator for RL78/G11 V1.02.02.04 [24 May 2018]
 * Device(s)    : R5F1056A
 * Tool-Chain   : CCRL
-* Description  : This file implements device driver for IT module.
+* Description  : This file implements device driver for PFDL module.
 * Creation Date: 10-Jun-20
 ***********************************************************************************************************************/
+#ifndef PFDL_H
+#define PFDL_H
 
 /***********************************************************************************************************************
-Includes
+Macro definitions (Register bit)
 ***********************************************************************************************************************/
-#include "r_cg_macrodriver.h"
-#include "r_cg_it.h"
-/* Start user code for include. Do not edit comment generated here */
-/* End user code. Do not edit comment generated here */
-#include "r_cg_userdefine.h"
+
+/*
+*******************************************************************************
+**  Include files
+*******************************************************************************
+*/
+#include "pfdl.h"            /* library header file */
+#include "pfdl_types.h"      /* library header file */
 
 /***********************************************************************************************************************
-Pragma directive
+Macro definitions
 ***********************************************************************************************************************/
-/* Start user code for pragma. Do not edit comment generated here */
-/* End user code. Do not edit comment generated here */
+#define _48_HOCO_CLOCK_MHz             (48)  /* HOCO clock value in MHz */
+#define _FULL_SPEED_MODE               (0)   /* Flash Programming Mode is Full Speed */
 
 /***********************************************************************************************************************
-Global variables and functions
+Typedef definitions
 ***********************************************************************************************************************/
-/* Start user code for global. Do not edit comment generated here */
-/* End user code. Do not edit comment generated here */
 
 /***********************************************************************************************************************
-* Function Name: R_IT_Create
-* Description  : This function initializes the IT module.
-* Arguments    : None
-* Return Value : None
+Global functions
 ***********************************************************************************************************************/
-void R_IT_Create(void)
-{
-    TMKARES = 1U;   /* reset 12-bit interval timer */
-    TMKARES = 0U;   /* reset release of 12-bit interval timer */
-    TMKAEN = 1U;    /* enables input clock supply */
-    ITMC = _0000_IT_OPERATION_DISABLE;
-    TMKAMK = 1U;    /* disable INTIT interrupt */
-    TMKAIF = 0U;    /* clear INTIT interrupt flag */
-    /* Set INTIT level 1 priority */
-    TMKAPR1 = 0U;
-    TMKAPR0 = 1U;
-    TPS3 = _04_IT_CLOCK_FCLK_8;
-    ITMC = _0BB7_ITCMP_VALUE;
-}
-/***********************************************************************************************************************
-* Function Name: R_IT_Start
-* Description  : This function starts IT module operation.
-* Arguments    : None
-* Return Value : None
-***********************************************************************************************************************/
-void R_IT_Start(void)
-{
-    TMKAIF = 0U;    /* clear INTIT interrupt flag */
-    TMKAMK = 0U;    /* enable INTIT interrupt */
-    ITMC |= _8000_IT_OPERATION_ENABLE;
-}
-/***********************************************************************************************************************
-* Function Name: R_IT_Stop
-* Description  : This function stops IT module operation.
-* Arguments    : None
-* Return Value : None
-***********************************************************************************************************************/
-void R_IT_Stop(void)
-{
-    TMKAMK = 1U;    /* disable INTIT interrupt */
-    TMKAIF = 0U;    /* clear INTIT interrupt flag */
-    ITMC &= (uint16_t)~_8000_IT_OPERATION_ENABLE;
-}
+void R_FDL_Create(void);
+pfdl_status_t R_FDL_Write(pfdl_u16 index, __near pfdl_u08* buffer, pfdl_u16 bytecount);
+pfdl_status_t R_FDL_Read(pfdl_u16 index, __near pfdl_u08* buffer, pfdl_u16 bytecount);
+pfdl_status_t R_FDL_Erase(pfdl_u16 blockno);
+void R_FDL_Open(void);
+void R_FDL_Close(void);
 
-/* Start user code for adding. Do not edit comment generated here */
-/* End user code. Do not edit comment generated here */
+#endif

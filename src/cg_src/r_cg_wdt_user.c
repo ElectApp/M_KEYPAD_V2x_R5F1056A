@@ -23,7 +23,7 @@
 * Device(s)    : R5F1056A
 * Tool-Chain   : CCRL
 * Description  : This file implements device driver for WDT module.
-* Creation Date: 14-Mar-20
+* Creation Date: 10-Jun-20
 ***********************************************************************************************************************/
 
 /***********************************************************************************************************************
@@ -38,7 +38,6 @@ Includes
 /***********************************************************************************************************************
 Pragma directive
 ***********************************************************************************************************************/
-#pragma interrupt r_wdt_interrupt(vect=INTWDTI)
 /* Start user code for pragma. Do not edit comment generated here */
 /* End user code. Do not edit comment generated here */
 
@@ -48,20 +47,6 @@ Global variables and functions
 /* Start user code for global. Do not edit comment generated here */
 /* End user code. Do not edit comment generated here */
 
-/***********************************************************************************************************************
-* Function Name: r_wdt_interrupt
-* Description  : None
-* Arguments    : None
-* Return Value : None
-***********************************************************************************************************************/
-static void __near r_wdt_interrupt(void)
-{
-    /* Start user code. Do not edit comment generated here */
-
-	R_WDT_Restart();	//Restart
-
-    /* End user code. Do not edit comment generated here */
-}
 
 /* Start user code for adding. Do not edit comment generated here */
 /* End user code. Do not edit comment generated here */

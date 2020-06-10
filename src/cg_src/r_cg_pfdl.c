@@ -18,11 +18,11 @@
 ***********************************************************************************************************************/
 
 /***********************************************************************************************************************
-* File Name    : r_cg_sau_user.c
+* File Name    : r_cg_pfdl.c
 * Version      : Code Generator for RL78/G11 V1.02.02.04 [24 May 2018]
 * Device(s)    : R5F1056A
 * Tool-Chain   : CCRL
-* Description  : This file implements device driver for SAU module.
+* Description  : This file implements device driver for PFDL module.
 * Creation Date: 10-Jun-20
 ***********************************************************************************************************************/
 
@@ -30,140 +30,145 @@
 Includes
 ***********************************************************************************************************************/
 #include "r_cg_macrodriver.h"
-#include "r_cg_sau.h"
+#include "r_cg_cgc.h"
+#include "r_cg_pfdl.h"
 /* Start user code for include. Do not edit comment generated here */
-#include "u_modbus2.h"
 /* End user code. Do not edit comment generated here */
 #include "r_cg_userdefine.h"
 
 /***********************************************************************************************************************
 Pragma directive
 ***********************************************************************************************************************/
-#pragma interrupt r_uart1_interrupt_send(vect=INTST1)
-#pragma interrupt r_uart1_interrupt_receive(vect=INTSR1)
 /* Start user code for pragma. Do not edit comment generated here */
 /* End user code. Do not edit comment generated here */
 
 /***********************************************************************************************************************
 Global variables and functions
 ***********************************************************************************************************************/
-extern volatile uint8_t * gp_uart1_tx_address;         /* uart1 send buffer address */
-extern volatile uint16_t  g_uart1_tx_count;            /* uart1 send data number */
-extern volatile uint8_t * gp_uart1_rx_address;         /* uart1 receive buffer address */
-extern volatile uint16_t  g_uart1_rx_count;            /* uart1 receive data number */
-extern volatile uint16_t  g_uart1_rx_length;           /* uart1 receive data length */
+pfdl_status_t gFdlResult;    /* Return value */
+pfdl_request_t gFdlReq;      /* Control variable for PFDL */
+pfdl_descriptor_t gFdlDesc;
+uint8_t gFdlStatus;	         /* This indicates status of FDL library that is "close" or "open". (open=1, close=0) */
 /* Start user code for global. Do not edit comment generated here */
-
 /* End user code. Do not edit comment generated here */
 
 /***********************************************************************************************************************
-* Function Name: r_uart1_interrupt_receive
-* Description  : None
+* Function Name: R_FDL_Create
+* Description  : This function initializes the flash data library.
 * Arguments    : None
 * Return Value : None
 ***********************************************************************************************************************/
-static void __near r_uart1_interrupt_receive(void)
+void R_FDL_Create(void)
 {
-    volatile uint8_t rx_data;
-    volatile uint8_t err_type;
-    
-    err_type = (uint8_t)(SSR03 & 0x0007U);
-    SIR03 = (uint16_t)err_type;
-
-    if (err_type != 0U)
+    gFdlDesc.fx_MHz_u08 = _48_HOCO_CLOCK_MHz;   /* Set an integer of the range from 1 to 48 according to GUI setting of HOCO. */
+    gFdlDesc.wide_voltage_mode_u08 = _FULL_SPEED_MODE; /* Voltage mode */
+}
+/***********************************************************************************************************************
+* Function Name: R_FDL_Write
+* Description  : This function write a data to the RL78 data flash memory.
+* Arguments    : index -
+*                    It is destination address of Flash memory for writing a data. The address range is from 0x0000 to 0x0FFF
+*                buffer -
+*                    The top address of data to write
+*                bytecount -
+*                    The size of data to write (Unit is byte)
+* Return Value : pfdl_status_t -
+*                    status of write command
+***********************************************************************************************************************/
+pfdl_status_t R_FDL_Write(pfdl_u16 index, __near pfdl_u08* buffer, pfdl_u16 bytecount)
+{
+    gFdlReq.index_u16     = index;
+    gFdlReq.data_pu08     = buffer;
+    gFdlReq.bytecount_u16 = bytecount;
+    gFdlReq.command_enu   = PFDL_CMD_WRITE_BYTES;
+    gFdlResult = PFDL_Execute(&gFdlReq);
+    /* Wait for completing command */
+    while(gFdlResult == PFDL_BUSY )
     {
-        r_uart1_callback_error(err_type);
+        NOP(); 
+        NOP();
+        gFdlResult = PFDL_Handler();     /* The process for confirming end */
     }
-    
-    rx_data = RXD1;
-
-    if (g_uart1_rx_length > g_uart1_rx_count)
+    return gFdlResult;
+}
+/***********************************************************************************************************************
+* Function Name: R_FDL_Read
+* Description  : This function reads a data flash memory.
+* Arguments    : index -
+*                    It is destination address of Flash memory for reading a data. The address range is from 0x0000 to 0x0FFF
+*                buffer -
+*                    The top address of data to read
+*                bytecount -
+*                    The size of data to read (Unit is byte)
+* Return Value : pfdl_status_t -
+*                    status of read command
+***********************************************************************************************************************/
+pfdl_status_t R_FDL_Read(pfdl_u16 index, __near pfdl_u08* buffer, pfdl_u16 bytecount)
+{
+    if (gFdlStatus == 1)
     {
-        *gp_uart1_rx_address = rx_data;
-        gp_uart1_rx_address++;
-        g_uart1_rx_count++;
-
-        if (g_uart1_rx_length == g_uart1_rx_count)
+         gFdlReq.index_u16     = index;
+         gFdlReq.data_pu08     = buffer;
+         gFdlReq.bytecount_u16 = bytecount;
+         gFdlReq.command_enu   = PFDL_CMD_READ_BYTES;
+         gFdlResult = PFDL_Execute(&gFdlReq);
+     }
+     else 
+     {
+         gFdlResult = PFDL_ERR_PROTECTION;
+     }
+     return gFdlResult;
+}
+/***********************************************************************************************************************
+* Function Name: R_FDL_Erase
+* Description  : This function erases a block of data flash.
+* Arguments    : blockno -
+*                    The block number to erase data flash. The range of block number is from 0 to 3
+* Return Value : pfdl_status_t -
+*                    status of erase command
+***********************************************************************************************************************/
+pfdl_status_t R_FDL_Erase(pfdl_u16 blockno)
+{
+    if (gFdlStatus == 1)
+    {
+        gFdlReq.index_u16     = blockno;
+        gFdlReq.command_enu   = PFDL_CMD_ERASE_BLOCK;
+        gFdlResult = PFDL_Execute(&gFdlReq);
+        /* Wait for completing command  */
+        while(gFdlResult == PFDL_BUSY)
         {
-            r_uart1_callback_receiveend();
+            NOP(); 
+            NOP();
+            gFdlResult = PFDL_Handler();     /* The process for confirming end */
         }
     }
-    else
+    else 
     {
-        r_uart1_callback_softwareoverrun(rx_data);
+        gFdlResult = PFDL_ERR_PROTECTION;
     }
+    return gFdlResult;
 }
 /***********************************************************************************************************************
-* Function Name: r_uart1_interrupt_send
-* Description  : None
+* Function Name: R_FDL_Open
+* Description  : This function opens the RL78 data flash library.
 * Arguments    : None
 * Return Value : None
 ***********************************************************************************************************************/
-static void __near r_uart1_interrupt_send(void)
+void R_FDL_Open(void)
 {
-    if (g_uart1_tx_count > 0U)
-    {
-        TXD1 = *gp_uart1_tx_address;
-        gp_uart1_tx_address++;
-        g_uart1_tx_count--;
-    }
-    else
-    {
-        r_uart1_callback_sendend();
-    }
+    PFDL_Open(&gFdlDesc);
+    gFdlStatus = 1;
 }
 /***********************************************************************************************************************
-* Function Name: r_uart1_callback_receiveend
-* Description  : This function is a callback function when UART1 finishes reception.
+* Function Name: R_FDL_Close
+* Description  : This function closes the RL78 data flash library.
 * Arguments    : None
 * Return Value : None
 ***********************************************************************************************************************/
-static void r_uart1_callback_receiveend(void)
+void R_FDL_Close(void)
 {
-    /* Start user code. Do not edit comment generated here */
-
-	Set_MB_Response();
-
-    /* End user code. Do not edit comment generated here */
-}
-/***********************************************************************************************************************
-* Function Name: r_uart1_callback_softwareoverrun
-* Description  : This function is a callback function when UART1 receives an overflow data.
-* Arguments    : rx_data -
-*                    receive data
-* Return Value : None
-***********************************************************************************************************************/
-static void r_uart1_callback_softwareoverrun(uint16_t rx_data)
-{
-    /* Start user code. Do not edit comment generated here */
-
-    /* End user code. Do not edit comment generated here */
-}
-/***********************************************************************************************************************
-* Function Name: r_uart1_callback_sendend
-* Description  : This function is a callback function when UART1 finishes transmission.
-* Arguments    : None
-* Return Value : None
-***********************************************************************************************************************/
-static void r_uart1_callback_sendend(void)
-{
-    /* Start user code. Do not edit comment generated here */
-
-	MB_Receive_Init();
-
-    /* End user code. Do not edit comment generated here */
-}
-/***********************************************************************************************************************
-* Function Name: r_uart1_callback_error
-* Description  : This function is a callback function when UART1 reception error occurs.
-* Arguments    : err_type -
-*                    error type value
-* Return Value : None
-***********************************************************************************************************************/
-static void r_uart1_callback_error(uint8_t err_type)
-{
-    /* Start user code. Do not edit comment generated here */
-    /* End user code. Do not edit comment generated here */
+    PFDL_Close();
+    gFdlStatus = 0;
 }
 
 /* Start user code for adding. Do not edit comment generated here */

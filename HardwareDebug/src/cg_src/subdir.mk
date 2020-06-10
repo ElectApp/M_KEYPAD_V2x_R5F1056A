@@ -9,6 +9,7 @@ C_SRCS += \
 ../src/cg_src/r_cg_it.c \
 ../src/cg_src/r_cg_it_user.c \
 ../src/cg_src/r_cg_main.c \
+../src/cg_src/r_cg_pfdl.c \
 ../src/cg_src/r_cg_port.c \
 ../src/cg_src/r_cg_port_user.c \
 ../src/cg_src/r_cg_sau.c \
@@ -26,6 +27,7 @@ src/cg_src/r_cg_cgc_user.obj \
 src/cg_src/r_cg_it.obj \
 src/cg_src/r_cg_it_user.obj \
 src/cg_src/r_cg_main.obj \
+src/cg_src/r_cg_pfdl.obj \
 src/cg_src/r_cg_port.obj \
 src/cg_src/r_cg_port_user.obj \
 src/cg_src/r_cg_sau.obj \
@@ -43,6 +45,7 @@ src/cg_src/r_cg_cgc_user.d \
 src/cg_src/r_cg_it.d \
 src/cg_src/r_cg_it_user.d \
 src/cg_src/r_cg_main.d \
+src/cg_src/r_cg_pfdl.d \
 src/cg_src/r_cg_port.d \
 src/cg_src/r_cg_port_user.d \
 src/cg_src/r_cg_sau.d \

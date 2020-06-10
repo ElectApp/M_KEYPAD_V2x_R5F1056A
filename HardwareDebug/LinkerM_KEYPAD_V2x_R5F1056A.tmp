@@ -4,7 +4,7 @@
 -nooptimize
 -entry=_start
 -security_id=00000000000000000000
--user_opt_byte=FFFFF0
+-user_opt_byte=7F53F0
 -ocdbg=04
 -input=".\generate\cstart.obj"
 -input=".\generate\stkinit.obj"
@@ -13,6 +13,7 @@
 -input=".\src/cg_src\r_cg_it.obj"
 -input=".\src/cg_src\r_cg_it_user.obj"
 -input=".\src/cg_src\r_cg_main.obj"
+-input=".\src/cg_src\r_cg_pfdl.obj"
 -input=".\src/cg_src\r_cg_port.obj"
 -input=".\src/cg_src\r_cg_port_user.obj"
 -input=".\src/cg_src\r_cg_sau.obj"
