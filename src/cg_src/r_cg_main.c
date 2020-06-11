@@ -68,7 +68,7 @@ void main(void)
     while (1U)
     {
     	//Data flash handle
-    	//DF_Handle();
+    	DF_Handle();
     }
     /* End user code. Do not edit comment generated here */
 }
@@ -83,6 +83,7 @@ static void R_MAIN_UserInit(void)
     /* Start user code. Do not edit comment generated here */
     EI();
 
+    //DF_Write();
     //DF_Read();					//Load Data Flash, Call this function in the first!!
 
     R_UART1_Start();			//UART

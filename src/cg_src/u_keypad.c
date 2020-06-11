@@ -40,6 +40,8 @@
 #define ALL_DIGIT_BLINK	0b00001111
 //Main LED Display
 #define MAIN_LED_OFF	0b00000111
+//All LED ON
+#define ALL_LED_ON		0b00111111
 
 
 //=================== Push Button value match SW[][] (Convert name to Inverter's Keypad) ============================//
@@ -54,12 +56,12 @@ const char Num_code[16]={0xEE,0x82,0xDC,0xDA,0xB2,0x7A,0x7E,0xC2,0xFE,0xFA,0xF6,
 
 //==================== Password ====================//
 const char PASS_LEN = 4;
-const unsigned char password[] = { MOVE_BT, SET_BT, SET_BT, RUN_BT };
-unsigned char lastPass[4];		//Save sequence of button that user press for checking password correct!
+const unsigned char PASSWORD[] = { MOVE_BT, SET_BT, SET_BT, RUN_BT };
+unsigned char lastPass[4];		//Save sequence of button that user press for checking PASSWORD correct!
 unsigned char pass_count;
 
 //============================== Other ============================//
-const unsigned char SOFT_VER = 122;		//Version: Reduce delay time to action MB, Fix bug sometime not change after press Up/Down BT
+const unsigned char SOFT_VER = 123;		//Version: Reset WDT, Voltage Detector, Test mode, Password, modbus_key_protocol_06-04-63
 const unsigned char PARA_LEN = 50;		//Number of parameter per group
 enum{
 	G_A,
@@ -83,8 +85,8 @@ O_COMMAND oCom;			//Storage Driver Command
 
 //=============== MODBUS ==============//
 #define SET_POINT_ADDR				memSize.ram_start+conAddr.f_set
-#define A00_ADDR					memSize.rom_start
-#define DISPLAY1_ADDR				memSize.ram_start+conD1Addr.d[key.A00]
+//#define A00_ADDR					memSize.rom_start
+#define DISPLAY1_ADDR				memSize.ram_start+conD1Addr.d[conAddr.i_dp1]
 #define SET_SIZE_ADDR				memSize.rom_start+conAddr.setSize
 #define VERSION_ADDR				memSize.rom_start+conAddr.softVer
 #define COMM_ADDR					memSize.ram_start+conAddr.operation
@@ -669,6 +671,7 @@ void SwitchCallback(unsigned char sw, BOOLEAN isDoubleClicked){
 		key.mode.bit.count_move = 0;
 		key.mode.bit.editing = 0;
 		key.mode.bit.set = 0;
+		key.mode.bit.unlock = 0;
 		key.mode.bit.wait_unlock = 0;
 		key.mode.bit.write_mb = 0;
 		key.mode.bit.read_mb = 0;
@@ -687,8 +690,13 @@ void SwitchCallback(unsigned char sw, BOOLEAN isDoubleClicked){
 			key.led.bit.func = 0;
 			key.mode.bit.function = 0;
 			//Back to Operating mode
-			//Re-read Set Point detail
-			Set_MB_Special(Fn_ReadDetailAddr, SET_POINT_ADDR);
+			if(key.mode.bit.ready){
+				//Back to Reading
+				Set_MB_Special(Fn_ReadConfigAddr, 0);
+			}else{
+				//Initial
+				Set_MB_Special(Fn_ReadMemorySize, SOFT_VER);
+			}
 			//Main
 			DisplayMain();
 		}
@@ -764,7 +772,21 @@ void SwitchCallback(unsigned char sw, BOOLEAN isDoubleClicked){
 		//Check state
 		switch(key.mode.bit.function){
 		case 1:
-			//Read Current Parameter Value
+			//Request PASSWORD?
+			if(key.parameter.detail.addr==SET_SIZE_ADDR){
+				if(key.mode.bit.unlock){
+					goto READ_PARA;
+				}else{
+					key.mode.bit.wait_unlock = 1;
+					//Show 'PASS'
+					DisplayCode(DG_P, DG_A, DG_S, DG_S);
+					return;
+				}
+			}else{
+				key.mode.bit.wait_unlock = 0;
+				key.mode.bit.unlock = 0;
+			}
+READ_PARA:	//Read Current Parameter Value
 			key.mode.bit.read_mb = 1U; //Set flag
 			Set_MB_Special(Fn_ReadDetailAddr, key.parameter.detail.addr);
 			break;
@@ -799,8 +821,7 @@ void SwitchCallback(unsigned char sw, BOOLEAN isDoubleClicked){
 		}else if(!key.mode.bit.function && !key.mode.bit.display && !oSt.bit.trip){
 			//Save to ROM
 			rom.data[RI_SP] = key.main_v[D_SP];
-			//rom.exe_flag = ROM_Write;
-			DF_Write();
+			rom.exe_flag = ROM_Write;
 			//Write to MB
 			WriteSetPoint();
 			key.mode.bit.write_mb = 1U; //Set flag
@@ -809,12 +830,16 @@ void SwitchCallback(unsigned char sw, BOOLEAN isDoubleClicked){
 	case RUN_BT:
 		//Allow?
 		if(key.mode.bit.function || oSt.bit.trip || !key.mode.bit.ready){ return; }
+		//Clear
+		key.digit_blink.byte = 0;
 		//RUN
 		WriteControlCommand(1);
 		break;
 	case STR_BT:
 		//Allow?
 		if(key.mode.bit.function || !key.mode.bit.ready){ return; }
+		//Clear
+		key.digit_blink.byte = 0;
 		//Set Command
 		oCom.word = 0;
 		oCom.bit.stop_run = 0;
@@ -826,18 +851,34 @@ void SwitchCallback(unsigned char sw, BOOLEAN isDoubleClicked){
 	}
 }
 
+void SwitchTestCallback(unsigned char sw){
+	//Allow
+	if(!key.mode.bit.test_sw){ return; }
+	  //SW change on sequence?
+	  if(sw>key.last_sw_t && (sw-key.last_sw_t)==1){
+	    //Show BT number
+		if(sw==DOWN_BT){
+			//Display: "PASS"
+			DisplayCode(DG_P, DG_A, DG_S, DG_S);
+		}else{
+			//Display "PX" by X = BT number
+			DisplayCode(0, 0, DG_P, Num_code[sw]);
+		}
+	    //Save
+	    key.last_sw_t = sw;
+	  }
+}
+
 void ClearLastPassword(void){
 	unsigned char i;
 	for(i=0; i<PASS_LEN; i++){
-		lastPass[i] = 0;	//Clear last password
+		lastPass[i] = 0;	//Clear last PASSWORD
 	}
 	pass_count = 0;			//Clear counter
 }
 
-
-
 /*
- * Check User press password
+ * Check User press PASSWORD
  *
  * */
 void CheckPassword(unsigned char sw){
@@ -859,10 +900,10 @@ void CheckPassword(unsigned char sw){
 	pass_count++;
 	if(pass_count==PASS_LEN){ pass_count = 0; }
 
-	//Check password
+	//Check PASSWORD
 	match = 1;
 	for(x=0; x<PASS_LEN; x++){
-		if(lastPass[x]!=password[x]){
+		if(lastPass[x]!=PASSWORD[x]){
 			match = 0;
 			break;
 		}
@@ -872,6 +913,7 @@ void CheckPassword(unsigned char sw){
 	if(match){
 		//Set flag but auto clear at SwitchCallback(ENTER_BT)
 		key.mode.bit.unlock = 1;
+		key.mode.bit.wait_unlock = 0;
 		//Unlock
 		SwitchCallback(ENTER_BT, FALSE);
 	}
@@ -887,7 +929,13 @@ void HoldUpDownActive(unsigned char sw){
 		//Clear
 		key.time_up[T_HOLD] = 0;
 		//Callback
-		SwitchCallback(sw, FALSE);
+		if(key.mode.bit.test){
+			//Test
+			SwitchTestCallback(sw);
+		}else{
+			//Normal
+			SwitchCallback(sw, FALSE);
+		}
 	}
 }
 
@@ -903,17 +951,23 @@ void BlockHoldSwitch(unsigned char sw){
 	if((ms_counter-key.last_time)>100){
 		//Clear
 		key.time_up[T_HOLD] = 0;
-		//Lock?
-		if(key.mode.bit.wait_unlock){
-			//Check Password
-			CheckPassword(sw);
-			//key.led.bit.run = 1;
+		//Callback
+		if(key.mode.bit.test){
+			//Test mode
+			SwitchTestCallback(sw);
 		}else{
-			//Count double-click
-			if(sw == key.double_sw){ key.count_double_sw++; }
-			//Callback
-			SwitchCallback(sw, (BOOLEAN)key.count_double_sw);
-			//DisplayDEC(key.count_double_sw, 0);
+			//Lock?
+			if(key.mode.bit.wait_unlock){
+				//Check Password
+				CheckPassword(sw);
+				//key.led.bit.run = 1;
+			}else{
+				//Count double-click
+				if(sw == key.double_sw){ key.count_double_sw++; }
+				//Callback
+				SwitchCallback(sw, (BOOLEAN)key.count_double_sw);
+				//DisplayDEC(key.count_double_sw, 0);
+			}
 		}
 	}else{
 		//Auto up/down
@@ -935,31 +989,7 @@ void SwitchModeSelector(unsigned char sw){
 
 		//Make sure user press this SW
 		if(key.sw_stack>2){
-
-			/*
-			//Check mode
-			if(key.mode.bit.function>0){
-				//Check button
-				if((sw==UP_BT || sw==DOWN_BT) && !key.mode.bit.wait_unlock){
-					HoldUpDownActive(sw);
-				}else{
-					BlockHoldSwitch(sw);
-				}
-			}else{
-				BlockHoldSwitch(sw);
-			}
-			*/
-
-			/*
-			if(sw==UP_BT || sw==DOWN_BT){
-				HoldUpDownActive(sw);
-			}else{
-				BlockHoldSwitch(sw);
-			}
-			*/
-
 			BlockHoldSwitch(sw);
-
 			//Clear stack
 			key.sw_stack = 0;
 		}
@@ -974,7 +1004,7 @@ void SwitchModeSelector(unsigned char sw){
 }
 
 void RunKeypad(void){
-
+	static unsigned short pressedT, unPressedT;
 	//========== Digit Display =================//
 	//Check writing success flag
 	if(key.mode.bit.set){
@@ -1023,7 +1053,7 @@ void RunKeypad(void){
 	if(!key.mode.bit.function && oSt.bit.stop_run && key.mode.bit.editing){
 		//Count time
 		key.time_up[T_SET]++;
-		if(key.time_up[T_SET]>1000){
+		if(key.time_up[T_SET]>2000){
 			//Clear
 			key.mode.bit.editing = 0;
 			key.mode.bit.count_move = 0;
@@ -1034,6 +1064,15 @@ void RunKeypad(void){
 		}
 	}
 
+	//Delay show "Software version"
+	if(key.mode.bit.test){
+		key.time_up[T_HOLD]++;
+		if(key.time_up[T_HOLD]>1000){
+			key.time_up[T_HOLD] = 0;
+			key.mode.bit.test_sw = 1;
+		}
+	}
+
 	//Update Display
 	RunDisplay();
 
@@ -1041,14 +1080,50 @@ void RunKeypad(void){
 	//========== Detect SW ============//
 	//Should call the finally in this function due to want to the current digit on
 	if(key.current_digit_on<4){
-
 		//Switch Active
 		if(SW_LINE1<1 && SW_LINE2<1){
+			key.mode.bit.test_sw = 0;
+			key.time_up[T_HOLD] = 0;
+			key.digit_blink.byte = 0;
 			//Press 2 SW in same time
+			if(key.current_digit_on==3){ //DG1
+				//Test mode: FUNC_BT + MOVE_BT
+			    //Count time to enter to Test mode
+			      pressedT++;
+			      if(pressedT>300){ //3s
+			        //Clear
+			        pressedT = 0;
+			        key.last_sw_t = 0;
+			        if(key.mode.bit.test==0){
+			          //Test Mode
+			          unsigned char a = SOFT_VER;
+			          key.mode.bit.test = 1;
+			          key.mode.bit.function = 1;
+			          key.led_blink.byte = ALL_LED_ON;
+			          //Show Software version
+			          if(a>=100){ a %= 100; }
+			          DisplayCode(DG_L, Num_code[SOFT_VER/100], Num_code[a/10], Num_code[a%10]);
+			        }else{
+			          //Back to Normal mode
+			          key.mode.bit.test = 0;
+			          key.mode.bit.function = 0;
+			          key.led_blink.byte = 0;
+			        }
+			      }
+			}
+
 		}else if(SW_LINE1<1){
+			pressedT = 0;
 			SwitchModeSelector(SW[0][key.current_digit_on]);
 		}else if(SW_LINE2<1){
+			pressedT = 0;
 			SwitchModeSelector(SW[1][key.current_digit_on]);
+		}else{
+		    //Auto clear
+		    unPressedT++;
+		    if(unPressedT>1000){
+		      unPressedT = 0; pressedT = 0;
+		    }
 		}
 
 	}
@@ -1127,12 +1202,18 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 			//Set MB for Interval Reading
 			mbG.group[0].start_address = memSize.ram_start;	//Main
 			mbG.group[0].length = GetMaxValueOfArray((unsigned char*)&conAddr, 2, sizeof(conAddr))+1;
-			mbG.group[1].start_address = A00_ADDR;	//A-00
+			mbG.group[1].start_address = DISPLAY1_ADDR;
 			mbG.group[1].length = 1;
 			mbG.total = 2;
 			mbG.counter = 0;
-			//Read Set Point detail
-			Set_MB_Special(Fn_ReadDetailAddr, SET_POINT_ADDR);
+			//Initial?
+			if(!key.mode.bit.ready){
+				//Read Set Point detail
+				Set_MB_Special(Fn_ReadDetailAddr, SET_POINT_ADDR);
+			}else{
+				//Interval reading
+				mbCon.next_fn = Fn_ReadHolding;
+			}
 			break;
 		case Fn_ReadDetailAddr:
 			//Setting mode?
@@ -1147,7 +1228,7 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 						key.main_v[D_SP] = f_setDetail.def;
 						//Save ROM
 						rom.data[RI_SP] = key.main_v[D_SP];
-						DF_Write();
+						rom.exe_flag = ROM_Write;
 					}else{
 						//Use value from ROM
 						key.main_v[D_SP] = rom.data[RI_SP];
@@ -1189,12 +1270,14 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 		case Fn_ReadHolding: //key.led.bit.hz = 1U;
 			//Ready
 			key.mode.bit.ready = 1;
+			/*
 			//Set MB interval reading for display 1
 			if(mb->request == A00_ADDR){
 				key.A00 = mb->response[0];
 				mbG.group[1].start_address = DISPLAY1_ADDR;
 				mbG.group[1].length = 1;
 			}
+			*/
 			//Interval Checking
 			if(mb->request == memSize.ram_start)
 			{
@@ -1222,7 +1305,7 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 				key.led.bit.run = oSt.bit.stop_run;
 				key.led.bit.stop = !oSt.bit.stop_run;
 			}
-			if(mb->request == mbG.group[1].start_address)
+			if(mb->request == DISPLAY1_ADDR)
 			{
 				//if(!key.mode.bit.ready){ key.mode.bit.ready = 1; }
 				key.main_v[D_D1] = mb->response[0];	//Display 1 (All LED Off)
@@ -1267,13 +1350,13 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 				key.mode.bit.write_mb = 0;	//blocking update again
 				key.mode.bit.set = 1U; 		//Set flag for show SEt
 			}
-
+/*
 			//Update Display1 Address
 			if(mb->response[0]==A00_ADDR){
 				key.A00 = mb->response[1];
 				mbG.group[1].start_address = DISPLAY1_ADDR;
 			}
-
+*/
 			//Verify 'set point' value
 			if(mb->response[0]==SET_POINT_ADDR)
 			{

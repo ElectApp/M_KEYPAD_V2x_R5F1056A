@@ -116,7 +116,7 @@ typedef struct {
 typedef struct {
 	unsigned char setSize;
 	unsigned char softVer;
-	unsigned char rsv;
+	unsigned char i_dp1;		//Index of Display 1
 	unsigned char operation;
 	unsigned char f_set;
 	unsigned char f_run;

@@ -41,12 +41,12 @@
 typedef enum{
 	FUNC_BT = 1,
 	MOVE_BT = 2,
-	UP_BT = 4,
-	STR_BT = 8,
-	DOWN_BT = 10,
-	SET_BT = 20,
-	ENTER_BT = 40,
-	RUN_BT = 80
+	RUN_BT = 3,
+	SET_BT = 4,
+	STR_BT = 5,
+	ENTER_BT = 6,
+	UP_BT = 7,
+	DOWN_BT = 8
 }BUTTON_TYPE;
 
 typedef union {
@@ -91,21 +91,25 @@ typedef union {
 }SW_DATA;
 
 typedef union {
-	unsigned short word;
+	unsigned long word;
 	struct {
-		unsigned short display		:2;			//Bit0-1: 0=Hz, 1=Amp, 2=F-00, 3=Set point
+		unsigned long display		:2;			//Bit0-1: 0=Hz, 1=Amp, 2=F-00, 3=Set point
 		//Bit2-3: 0=Operation mode, >0=Function Mode
 		//(1=Read parameter name, 2=Read value success)
-		unsigned short function 	:2;			//NOTE! 2bit => DEC value < 4
-		unsigned short read_mb		:1;			//Bit4:	1=Request read MB
-		unsigned short write_mb		:1;			//Bit5: 1=Request write MB
-		unsigned short unlock		:1;			//Bit6: 1=unlock
-		unsigned short wait_unlock	:1;			//Bit7: 1=Request password
-		unsigned short set			:1;			//Bit8: 0=Set point, 1=SEt
-		unsigned short editing		:1;			//Bit9: 1=Editing set point
-		unsigned short count_move	:3;			//Bit10-12:
-		unsigned short ready		:1;			//Bit13: 1=Ready response when press
-		unsigned short display_offset		:2;			//Bit14-15: Offset index on display
+		unsigned long function 	:2;			//NOTE! 2bit => DEC value < 4
+		unsigned long read_mb		:1;			//Bit4:	1=Request read MB
+		unsigned long write_mb		:1;			//Bit5: 1=Request write MB
+		unsigned long unlock		:1;			//Bit6: 1=unlock
+		unsigned long wait_unlock	:1;			//Bit7: 1=Request password
+		unsigned long set			:1;			//Bit8: 0=Set point, 1=SEt
+		unsigned long editing		:1;			//Bit9: 1=Editing set point
+		unsigned long count_move	:3;			//Bit10-12:
+		unsigned long ready		:1;			//Bit13: 1=Ready response when press
+		unsigned long display_offset		:2;			//Bit14-15: Offset index on display
+		unsigned long test			:1;			//Bit16: 1=Test mode
+		unsigned long test_sw		:1;			//Bit17: 1=Allow check SW
+		unsigned long init_sp		:1;			//Bit18: 1=Initial set point
+		unsigned long reserve		:13;
 	} bit;
 
 }HELD_FLAG;
@@ -159,6 +163,7 @@ typedef struct{
 	unsigned char double_sw;			///< Save last button for detection double-click
 	unsigned char count_double_sw;		///< Count double-click
 	unsigned char debug_sw;
+	unsigned char last_sw_t;        	///< Save last sw test
 } KEYPAD_DATA;
 
 //Control Command
