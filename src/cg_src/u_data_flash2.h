@@ -34,5 +34,6 @@ extern ROM_DATA rom;
 //Function
 void DF_Read(void);
 void DF_Write(void);
+void DF_Handle(void);
 
 #endif /* CG_SRC_U_DATA_FLASH2_H_ */

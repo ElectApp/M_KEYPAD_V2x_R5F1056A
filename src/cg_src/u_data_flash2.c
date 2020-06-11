@@ -43,7 +43,15 @@
 #include "pfdl.h"
 #include "pfdl_types.h"
 #include "u_data_flash2.h"
-#include "u_keypad.h"
+//#include "u_keypad.h"
+//#include "r_cg_macrodriver.h"					///< PORT
+#include "r_cg_it.h"							///< Loop 1 ms
+
+//============== Extern ================//
+extern unsigned short MB_CRC16(const unsigned  char *nData, unsigned short wLength);
+//extern KEYPAD_DATA key;
+
+//============== Local =================//
 
 pfdl_status_t  		pfdl_stt;
 pfdl_request_t		pfdl_req;
@@ -51,96 +59,75 @@ pfdl_descriptor_t   pfdl_des;
 unsigned char create_flag = 0, open_flag = 0;
 
 ROM_DATA rom;
-//extern KEYPAD_DATA key;
 
 unsigned char data_flash_write(unsigned short* add_buf, unsigned short w_len);
 unsigned char data_flash_read(unsigned short* add_buf, unsigned short w_len);
 
-
-/**
- * Calculates the CRC of the passed byte array from zero up to the
- * passed length.
- *
- * @param buffer the byte array containing the data.
- * @param length the length of the byte array.
- *
- * @return the calculated CRC as an unsigned 16 bit integer.
- *
- * Thank: https://github.com/yaacov/ArduinoModbusSlave/blob/master/src/ModbusSlave.cpp#L941-L964
- */
-unsigned short GetCRC(unsigned char *buffer, unsigned short length)
-{
-	unsigned short i, j;
-    short crc = 0xFFFF;
-    unsigned short tmp;
-
-    // calculate crc
-    for (i = 0; i < length; i++)
-    {
-        crc = crc ^ buffer[i];
-
-        for (j = 0; j < 8; j++)
-        {
-            tmp = crc & 0x0001;
-            crc = crc >> 1;
-            if (tmp)
-            {
-                crc = crc ^ 0xA001;
-            }
-        }
-    }
-
-    return crc;
-}
-
 void DF_Read(void){
 	unsigned char err;
 	unsigned short crc;
+//	P2_bit.no0 = 1U;
 	//Clear
 	rom.exe_flag = ROM_None;
 	//Read ROM
+//	data_flash_read(rom.data, 2);
 	err = data_flash_read(rom.data, RI_LEN);
-	//DisplayHEX(err);
 	//Check CRC
-	crc = GetCRC((unsigned char*)rom.data, RI_CRC*2);
+	crc = MB_CRC16((unsigned char*)rom.data, RI_CRC*2);
 	if(err || rom.data[RI_CRC]!=crc){
 		//Factory Reset
 		rom.exe_flag = ROM_Factory;
 	}
-	//DisplayDEC(rom.data[RI_SP], 0);
-
-	/*
-	err = data_flash_read(rom.data, RI_LEN);
+/*
+	DisplayDEC(crc, 0);
 	if(err){
 		DisplayHEX(err);
-		key.led.bit.stop = 1U;
+		//key.led.bit.stop = 1U;
 	}else{
-		key.led.bit.run = 1U;
-		DisplayDEC(rom.data[RI_CRC], 0);
+		//key.led.bit.run = 1U;
+		//DisplayDEC(rom.data[RI_CRC], 0);
 	}
-	*/
-
+*/
+//	P2_bit.no0 = 0U;
 }
 
 void DF_Write(void){
-	//unsigned char err;
-	//rom.data[RI_SP] = 3567;
+//	unsigned char err;
+//	P2_bit.no0 = 1U;
+//	rom.data[RI_SP] = 123;
+//	rom.data[RI_CRC] = 456;
 	//Clear
 	rom.exe_flag = ROM_None;
 	//CRC
-	rom.data[RI_CRC] = GetCRC((unsigned char*)rom.data, RI_CRC*2);
+	rom.data[RI_CRC] = MB_CRC16((unsigned char*)rom.data, RI_CRC*2);
 	//Write to ROM
 	data_flash_write(rom.data, RI_LEN);
-	/*
-	DisplayDEC(rom.data[RI_CRC], 0);
-	err = data_flash_write(rom.data, RI_LEN);
-	if(err){
-		key.led.bit.stop = 1U;
-		DisplayDEC(err, 0);
-	}else{
-		key.led.bit.run = 1U;
+//	DisplayDEC(rom.data[RI_CRC], 0);
+//	err = data_flash_write(rom.data, RI_LEN);
+//	if(err){
+//		//key.led.bit.stop = 1U;
+//		DisplayDEC(err, 0);
+//	}else{
+//		//key.led.bit.run = 1U;
+//	}
+//	P2_bit.no0 = 0U;
+}
+
+void DF_Handle(void){
+	switch(rom.exe_flag){
+	case ROM_Write:
+		//Stop loop 1ms
+		R_IT_Stop();
+		//Write action
+		DF_Write();
+		//Start loop 1ms
+		R_IT_Start();
+		break;
+	case ROM_Read:
+		//Read action
+		DF_Read();
+		break;
 	}
-	*/
 }
 
 
@@ -302,29 +289,18 @@ unsigned char data_flash_write(unsigned short* add_buf, unsigned short w_len){
 //read data flash function  //
 //**************************//
 unsigned char data_flash_read(unsigned short* add_buf, unsigned short w_len){
-	pfdl_u16    i;									//Index
-	pfdl_u08 u8Buf[sizeof(w_len)*2];				//Read buffer
-
 	//Open
 	FDL_Open();
-
 	//Read data
 	pfdl_req.command_enu = PFDL_CMD_READ_BYTES;		//Read
 	pfdl_req.index_u16 = 0;							//block 0 (always =1024 bytes/block)
 	pfdl_req.bytecount_u16 = w_len*2;				//length.(words)
-	pfdl_req.data_pu08 = u8Buf;
+	pfdl_req.data_pu08 = (pfdl_u08*)add_buf;		//specifics address buffer, Fixed bug 11-JUN-2020
 	pfdl_stt = PFDL_Execute(&pfdl_req);
-
-	//Copy to result
-	for(i=0; i<w_len; i++){
-		add_buf[i] = u8Buf[i] | (u8Buf[i+1]<<8);
-	}
-
 	//Close
 	FDL_Close();
 
 	return (unsigned char)pfdl_stt;
-
 }
 
 
