@@ -1,4 +1,4 @@
-Renesas Optimizing Linker (W3.01.00 )             11-Jun-2020 13:36:34
+Renesas Optimizing Linker (W3.01.00 )             12-Jun-2020 13:45:24
 
 *** Options ***
 
@@ -65,9 +65,9 @@ PFDL_COD
 .SLIB
                                   00000b05  00000b05         0   1
 .textf
-                                  00000b05  00002633      1b2f   1
+                                  00000b05  00002656      1b52   1
 .constf
-                                  00002634  00002634         0   2
+                                  00002658  00002658         0   2
 .const
                                   00003000  0000322b       22c   2
 .dataR

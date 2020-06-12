@@ -87,6 +87,7 @@ O_COMMAND oCom;			//Storage Driver Command
 #define SET_POINT_ADDR				memSize.ram_start+conAddr.f_set
 //#define A00_ADDR					memSize.rom_start
 #define DISPLAY1_ADDR				memSize.ram_start+conD1Addr.d[conAddr.i_dp1]
+#define DISPLAY1_INDEX				conD1Addr.d[conAddr.i_dp1]
 #define SET_SIZE_ADDR				memSize.rom_start+conAddr.setSize
 #define VERSION_ADDR				memSize.rom_start+conAddr.softVer
 #define COMM_ADDR					memSize.ram_start+conAddr.operation
@@ -500,7 +501,6 @@ void DisplayParameterValue(unsigned short *mb_value, unsigned char *decimal){
 
 
 void DisplayMain(void){
-
 	//Allow?
 	if(key.mode.bit.function || key.mode.bit.editing){ return; }
 	//Clear LED main display
@@ -510,7 +510,7 @@ void DisplayMain(void){
 	//Fault?
 	if(oSt.bit.trip){ return; }
 	//Display
-	switch(key.mode.bit.display){
+	switch((MAIN_DISPLAY_INDEX)key.mode.bit.display){
 		case D_SP: //SP
 			key.led.bit.sp = 1U;
 			//Block when editing set point
@@ -533,12 +533,13 @@ void DisplayMain(void){
 		case D_D1: //Display 1
 			//Signed?
 			if(bitRead(key.main_v[D_D1], 15)){
-				DisplaySigned(key.main_v[D_D1], conD1Addr.n[key.A00]);
+				DisplaySigned(key.main_v[D_D1], conD1Addr.n[conAddr.i_dp1]);
 			}else{
-				DisplayDEC(key.main_v[D_D1], conD1Addr.n[key.A00]);
+				DisplayDEC(key.main_v[D_D1], conD1Addr.n[conAddr.i_dp1]);
 			}
 			break;
 	}
+
 }
 
 //UP: flag = 1, DOWN: flag = -1
@@ -692,7 +693,8 @@ void SwitchCallback(unsigned char sw, BOOLEAN isDoubleClicked){
 			//Back to Operating mode
 			if(key.mode.bit.ready){
 				//Back to Reading
-				Set_MB_Special(Fn_ReadConfigAddr, 0);
+				//Set_MB_Special(Fn_ReadConfigAddr, 0);
+				mbCon.next_fn = Fn_ReadHolding;
 			}else{
 				//Initial
 				Set_MB_Special(Fn_ReadMemorySize, SOFT_VER);
@@ -1202,9 +1204,13 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 			//Set MB for Interval Reading
 			mbG.group[0].start_address = memSize.ram_start;	//Main
 			mbG.group[0].length = GetMaxValueOfArray((unsigned char*)&conAddr, 2, sizeof(conAddr))+1;
-			mbG.group[1].start_address = DISPLAY1_ADDR;
-			mbG.group[1].length = 1;
-			mbG.total = 2;
+//			mbG.group[1].start_address = DISPLAY1_ADDR;
+//			mbG.group[1].length = 1;
+//			mbG.total = 2;
+			if(mbG.group[0].length < DISPLAY1_INDEX+1){
+				mbG.group[0].length = DISPLAY1_INDEX+1;
+			}
+			mbG.total = 1;
 			mbG.counter = 0;
 			//Initial?
 			if(!key.mode.bit.ready){
@@ -1212,7 +1218,11 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 				Set_MB_Special(Fn_ReadDetailAddr, SET_POINT_ADDR);
 			}else{
 				//Interval reading
-				mbCon.next_fn = Fn_ReadHolding;
+				if(key.mode.bit.function){
+					Set_MB_ReadHolding(mbG.group[0].start_address, mbG.group[0].length);
+				}else{
+					mbCon.next_fn = Fn_ReadHolding;
+				}
 			}
 			break;
 		case Fn_ReadDetailAddr:
@@ -1279,10 +1289,12 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 			}
 			*/
 			//Interval Checking
-			if(mb->request == memSize.ram_start)
+			//Group 1
+			if((mb->request==mbG.group[0].start_address) && (mb->response_len==mbG.group[0].length))
 			{
 				//Status
 				oSt.word = mb->response[conAddr.operation];
+
 				//Fault
 				if(mb->response[conAddr.fault]){
 					//Read Fault code
@@ -1293,25 +1305,32 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 					oSt.bit.trip = 0;	//Clear
 					mbCon.next_fn = Fn_ReadHolding;
 				}
+
 				//Update Main Display
 //				if(!key.mode.bit.editing && !key.mode.bit.count_move){
 //					key.main_v[D_SP] = mb->response[conAddr.f_set]; 	//Set point
 //				}
 				//key.main_v[D_SP] = mb->response[conAddr.f_set];
+
 				key.main_v[D_RUN] = mb->response[conAddr.f_run]; //Running
 				key.main_v[D_Hz] = mb->response[conAddr.hz];	 //Hz
 				key.main_v[D_A] = mb->response[conAddr.a];		 //A
+				key.main_v[D_D1] = mb->response[DISPLAY1_INDEX]; //Display 1
+
 				//LED status
 				key.led.bit.run = oSt.bit.stop_run;
 				key.led.bit.stop = !oSt.bit.stop_run;
 			}
-			if(mb->request == DISPLAY1_ADDR)
-			{
-				//if(!key.mode.bit.ready){ key.mode.bit.ready = 1; }
-				key.main_v[D_D1] = mb->response[0];	//Display 1 (All LED Off)
-			}
+
+			//Group 2
+//			if((mb->request==mbG.group[1].start_address) && (mb->response_len==mbG.group[1].length))
+//			{
+//				key.main_v[D_D1] = mb->response[0];	//Display 1 (All LED Off)
+//			}
+
 			//Display Main
 			DisplayMain();
+
 			//Next group
 			mbG.counter++;
 			mbCon.interval_time = 10;	//Delay polls
@@ -1369,8 +1388,14 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 //				if(mb->)
 //			}
 
-			//Back to Reading
-			mbCon.next_fn = Fn_ReadHolding;
+			//Mode?
+			if(key.mode.bit.function){
+				//Re-update configuration
+				Set_MB_Special(Fn_ReadConfigAddr, 0);
+			}else{
+				//Back to Reading
+				mbCon.next_fn = Fn_ReadHolding;
+			}
 			break;
 		}
 	}
@@ -1407,6 +1432,7 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 	if(!key.mode.bit.read_mb && mbCon.next_fn == Fn_ReadHolding)
 	{
 		Set_MB_ReadHolding(mbG.group[mbG.counter].start_address, mbG.group[mbG.counter].length);
+		//key.led_blink.byte = (~key.led_blink.byte)&ALL_LED_ON;
 	}
 
 }

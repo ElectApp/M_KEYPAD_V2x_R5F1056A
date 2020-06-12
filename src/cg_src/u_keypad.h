@@ -159,7 +159,7 @@ typedef struct{
 	signed long mb_buffer;				///< Buffer for write to MB
 	unsigned short main_v[D_MAX];		///< Save Main value: SP, Hz, A, D1
 	unsigned char mb_timeout;			///< Count MB timeout to display -tO-
-	unsigned char A00;					///< Save value of A00
+	//unsigned char A00;					///< Save value of A00
 	unsigned char double_sw;			///< Save last button for detection double-click
 	unsigned char count_double_sw;		///< Count double-click
 	unsigned char debug_sw;
