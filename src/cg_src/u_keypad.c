@@ -61,7 +61,7 @@ unsigned char lastPass[4];		//Save sequence of button that user press for checki
 unsigned char pass_count;
 
 //============================== Other ============================//
-const unsigned char SOFT_VER = 123;		//Version: Reset WDT, Voltage Detector, Test mode, Password, modbus_key_protocol_06-04-63
+const unsigned char SOFT_VER = 124;		//Version: Read Set point and command address at initial for allowing R/W
 const unsigned char PARA_LEN = 50;		//Number of parameter per group
 enum{
 	G_A,
@@ -101,7 +101,7 @@ MB_CONFIG mbCon;
 MB_MEMORY_SIZE memSize;
 MB_CONFIG_ADDR conAddr;
 MB_CONFIG_D1_ADDR conD1Addr;
-MB_DETAIL_ADDR f_setDetail;
+MB_DETAIL_ADDR f_setDetail, commDetail;
 MB_GROUP mbG;
 
 //Other
@@ -820,7 +820,7 @@ READ_PARA:	//Read Current Parameter Value
 			//Write to MB
 			Set_MB_WriteSingle(key.parameter.detail.addr, key.parameter.detail.data); //Action
 			key.mode.bit.write_mb = 1U; //Set flag
-		}else if(!key.mode.bit.function && !key.mode.bit.display && !oSt.bit.trip){
+		}else if(!key.mode.bit.function && !key.mode.bit.display && !oSt.bit.trip && f_setDetail.rw){
 			//Save to ROM
 			rom.data[RI_SP] = key.main_v[D_SP];
 			rom.exe_flag = ROM_Write;
@@ -831,7 +831,7 @@ READ_PARA:	//Read Current Parameter Value
 		break;
 	case RUN_BT:
 		//Allow?
-		if(key.mode.bit.function || oSt.bit.trip || !key.mode.bit.ready){ return; }
+		if(!commDetail.rw || key.mode.bit.function || oSt.bit.trip || !key.mode.bit.ready){ return; }
 		//Clear
 		key.digit_blink.byte = 0;
 		//RUN
@@ -839,7 +839,7 @@ READ_PARA:	//Read Current Parameter Value
 		break;
 	case STR_BT:
 		//Allow?
-		if(key.mode.bit.function || !key.mode.bit.ready){ return; }
+		if(!commDetail.rw || key.mode.bit.function || !key.mode.bit.ready){ return; }
 		//Clear
 		key.digit_blink.byte = 0;
 		//Set Command
@@ -1214,8 +1214,8 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 			mbG.counter = 0;
 			//Initial?
 			if(!key.mode.bit.ready){
-				//Read Set Point detail
-				Set_MB_Special(Fn_ReadDetailAddr, SET_POINT_ADDR);
+				//Read Command detail
+				Set_MB_Special(Fn_ReadDetailAddr, COMM_ADDR);
 			}else{
 				//Interval reading
 				if(key.mode.bit.function){
@@ -1243,8 +1243,20 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 						//Use value from ROM
 						key.main_v[D_SP] = rom.data[RI_SP];
 					}
-					//Write Set point to MB
-					WriteSetPoint();
+					//Next Action
+					if(f_setDetail.rw){
+						//Write Set point to MB
+						WriteSetPoint();
+					}else{
+						//Start interval reading
+						mbCon.next_fn = Fn_ReadHolding;
+					}
+
+				}else if(mbSpec->detail.addr == COMM_ADDR){
+					//Command detail
+					commDetail = mbSpec->detail;
+					//Next to Read Set point
+					Set_MB_Special(Fn_ReadDetailAddr, SET_POINT_ADDR);
 				}
 			}
 			else
