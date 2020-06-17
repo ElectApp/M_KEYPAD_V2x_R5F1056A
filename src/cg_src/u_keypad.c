@@ -61,7 +61,7 @@ unsigned char lastPass[4];		//Save sequence of button that user press for checki
 unsigned char pass_count;
 
 //============================== Other ============================//
-const unsigned char SOFT_VER = 125;		//Version: Show MB error code, Disable MB retrying and re-update Set point and Command detail
+const unsigned char SOFT_VER = 126;		//Version: Show MB ERROR like as SEt
 const unsigned char PARA_LEN = 50;		//Number of parameter per group
 enum{
 	G_A,
@@ -693,7 +693,6 @@ void SwitchCallback(unsigned char sw, BOOLEAN isDoubleClicked){
 			//Back to Operating mode
 			if(key.mode.bit.ready){
 				//Back to Reading
-				//Set_MB_Special(Fn_ReadConfigAddr, 0);
 				mbCon.next_fn = Fn_ReadHolding;
 			}else{
 				//Initial
@@ -1010,9 +1009,13 @@ void RunKeypad(void){
 	//========== Digit Display =================//
 	//Check writing success flag
 	if(key.mode.bit.set){
-		//Hold 'SEt' with no blink
+		//Hold 'SEt' or ERROR with no blink
 		key.digit_blink.byte = 0;
-		DisplayCode(0, DG_S, DG_E, DG_t);
+		if(key.mb_err>0){
+			DisplayHEX(key.mb_err); key.digitData[0] = DG_E;
+		}else{
+			DisplayCode(0, DG_S, DG_E, DG_t);
+		}
 		key.time_up[T_SET]++;
 		if(key.time_up[T_SET]>500){
 			key.mode.bit.set = 0;
@@ -1368,6 +1371,9 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 				key.mode.bit.write_mb = 0;	//blocking update again
 				key.mode.bit.set = 1U; 		//Set flag for show SEt
 			}
+			//Clear to show SEt
+			key.mb_err = 0;
+
 			//Verify 'set point' value
 			if(mb->response[0]==SET_POINT_ADDR)
 			{
@@ -1385,36 +1391,29 @@ void ModbusResponse(MB_RESPONE *mb, MB_SPECIAL *mbSpec){
 			break;
 		}
 	}
-	else if(mb->error==ERR_ResponseTimeout)
-	{
-		//Count Timeout to display -tO-
-		key.mb_timeout++;
-		if(key.mb_timeout>5){
-			key.mb_timeout = 0;
-			//Block 'MOVE' BTN
-			key.mode.bit.ready = 0;
-			//Display -tO-
-			DisplayMain();
-			//
-			mbCon.interval_time = INTERVAL_STOP;
-		}
-	}
 	else
 	{
-
-//		unsigned short d = (unsigned short)mb->fn<<8 | mb->error;	//FFEE by FF = Function Code, EE = Error Code
-//		DisplayHEX(d);
-//		mbCon.interval_time = INTERVAL_STOP;
-
-		//Display Error "EXXX" XXX = Error Code
-		DisplayHEX(mb->error); key.digitData[0] = DG_E;
-
-		//Clear and back to Interval Reading
+		//Interval reading time
 		mbCon.interval_time = INTERVAL_STOP;
-		key.mode.bit.read_mb = 0;
-		key.mode.bit.write_mb = 0;
-		mbCon.next_fn = Fn_ReadHolding;
-
+		//Save last MB error
+		if(mbCon.next_fn==Fn_WriteSingle){
+			key.mb_err = mb->error;
+			key.mode.bit.set = 1U; 		//Set flag for show ERROR
+			//Back to interval reading
+			key.mode.bit.read_mb = 0;
+			key.mode.bit.write_mb = 0;
+			mbCon.next_fn = Fn_ReadHolding;
+		}else{
+			//Count Timeout to display -tO-
+			key.mb_timeout++;
+			if(key.mb_timeout>5){
+				key.mb_timeout = 0;
+				//Block 'MOVE' BTN
+				key.mode.bit.ready = 0;
+				//Display -tO-
+				DisplayMain();
+			}
+		}
 	}
 
 	//Back to Interval Reading

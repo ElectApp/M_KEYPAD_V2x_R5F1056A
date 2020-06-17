@@ -164,6 +164,7 @@ typedef struct{
 	unsigned char count_double_sw;		///< Count double-click
 	unsigned char debug_sw;
 	unsigned char last_sw_t;        	///< Save last sw test
+	unsigned char mb_err;				///< Save last MB error
 } KEYPAD_DATA;
 
 //Control Command
